@@ -1,0 +1,35 @@
+version: 2
+
+project_name: etcd-ui
+
+builds:
+  - main: ./cmd/etcd-ui
+    binary: etcd-ui
+    env:
+      - CGO_ENABLED=0
+
+    goos:
+      - linux
+      - darwin
+      - windows
+
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  name_template: "{{ .Tag }}-next"
+
+release:
+  github:
+    owner: phannaly
+    name: etcd-ui

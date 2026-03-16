@@ -1,0 +1,2197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>etcd Browser</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Geist', 'ui-sans-serif', 'system-ui'],
+        mono: ['"Geist Mono"', 'ui-monospace', 'monospace'],
+      },
+      colors: {
+        bg:    { DEFAULT: '#0d1117', card: '#161b27', hover: '#1a2133', border: '#1e293b', muted: '#1e2d45' },
+        slate: { 50:'#f8fafc',100:'#f1f5f9',200:'#e2e8f0',300:'#cbd5e1',400:'#94a3b8',500:'#64748b',600:'#475569',700:'#334155',800:'#1e293b',900:'#0f172a',950:'#020617' },
+        blue:  { DEFAULT:'#3b82f6', 500:'#3b82f6', 400:'#60a5fa', 600:'#2563eb', dim:'rgba(59,130,246,0.1)', soft:'rgba(59,130,246,0.2)' },
+        green: { DEFAULT:'#22c55e', dim:'rgba(34,197,94,0.1)' },
+        red:   { DEFAULT:'#ef4444', dim:'rgba(239,68,68,0.1)' },
+        amber: { DEFAULT:'#f59e0b', dim:'rgba(245,158,11,0.1)' },
+        violet:{ DEFAULT:'#8b5cf6', dim:'rgba(139,92,246,0.1)' },
+      },
+      borderColor: { DEFAULT: '#1e293b' },
+    }
+  }
+}
+</script>
+<style>
+  * { box-sizing: border-box; }
+  body { background: #0d1117; color: #cbd5e1; font-family: 'Geist', sans-serif; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 12px; border-radius: 6px;
+    font-size: 13px; font-weight: 500; color: #94a3b8;
+    transition: all 0.15s; cursor: pointer;
+  }
+  .nav-item:hover { color: #f1f5f9; background: #1a2133; }
+  .nav-item.active { background: rgba(59,130,246,0.1); color: #60a5fa; }
+
+  .btn-primary { display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:0 8px;border-radius:4px;height:22px;box-sizing:border-box;font-size:11px;font-weight:500;line-height:1;transition:all 0.15s;cursor:pointer;white-space:nowrap;flex-shrink:0;border:1px solid transparent; background:#2563eb;color:#fff;border-color:#3b82f6; }
+  .btn-primary:hover { background:#3b82f6; }
+  .btn-ghost   { display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:0 8px;border-radius:4px;height:22px;box-sizing:border-box;font-size:11px;font-weight:500;line-height:1;transition:all 0.15s;cursor:pointer;white-space:nowrap;flex-shrink:0;border:1px solid transparent; background:transparent;color:#94a3b8;border-color:#1e293b; }
+  .btn-ghost:hover   { background:#1a2133;color:#f1f5f9; }
+  .btn-danger  { display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:0 8px;border-radius:4px;height:22px;box-sizing:border-box;font-size:11px;font-weight:500;line-height:1;transition:all 0.15s;cursor:pointer;white-space:nowrap;flex-shrink:0;border:1px solid transparent; background:rgba(239,68,68,0.1);color:#f87171;border-color:rgba(239,68,68,0.2); }
+  .btn-danger:hover  { background:rgba(239,68,68,0.2); }
+
+  .input {
+    width: 100%; background: #161b27; border: 1px solid #1e293b;
+    border-radius: 6px; font-size: 11px; color: #e2e8f0;
+    padding: 3px 10px; outline: none; font-family: 'Geist Mono', monospace;
+    transition: border-color 0.15s;
+  }
+  .input::placeholder { color: #334155; }
+  .input:focus { border-color: rgba(59,130,246,0.5); box-shadow: 0 0 0 2px rgba(59,130,246,0.1); }
+
+  .badge {
+    display: inline-flex; align-items: center;
+    padding: 1px 6px; border-radius: 3px;
+    font-size: 10px; font-weight: 500; font-family: 'Geist Mono', monospace;
+    border: 1px solid transparent;
+  }
+  .badge-blue   { background: rgba(59,130,246,0.1);  color: #60a5fa; border-color: rgba(59,130,246,0.2); }
+  .badge-green  { background: rgba(34,197,94,0.1);   color: #4ade80; border-color: rgba(34,197,94,0.2); }
+  .badge-red    { background: rgba(239,68,68,0.1);   color: #f87171; border-color: rgba(239,68,68,0.2); }
+  .badge-amber  { background: rgba(245,158,11,0.1);  color: #fbbf24; border-color: rgba(245,158,11,0.2); }
+  .badge-violet { background: rgba(139,92,246,0.1);  color: #a78bfa; border-color: rgba(139,92,246,0.2); }
+  .badge-muted  { background: #1a2133; color: #94a3b8; border-color: #1e293b; }
+
+  .card { background: #161b27; border: 1px solid #1e293b; border-radius: 8px; }
+
+  .jk { color: #93c5fd; }
+  .js { color: #86efac; }
+  .jn { color: #fcd34d; }
+  .jb { color: #c4b5fd; }
+  .jl { color: #64748b; }
+  .jp { color: #334155; }
+
+  mark { background: rgba(59,130,246,0.2); color: #93c5fd; border-radius: 2px; padding: 0 2px; }
+
+  .tree-row {
+    display: flex; align-items: center; gap: 4px;
+    padding: 2px 6px; border-radius: 4px;
+    cursor: pointer; transition: background 0.1s;
+    font-size: 11px; color: #94a3b8;
+  }
+  .tree-row:hover { background: #1a2133; }
+  .tree-row.selected { background: rgba(59,130,246,0.1); color: #60a5fa; }
+  .tree-row.selected .tree-label { color: #93c5fd; }
+
+  .event-row { animation: slideUp 0.15s ease-out; }
+  @keyframes slideUp { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+
+  .stat-card {
+    background: #161b27; border: 1px solid #1e293b; border-radius: 8px;
+    padding: 20px; position: relative; overflow: hidden;
+  }
+  .stat-card::after {
+    content:''; position:absolute; top:-20px; right:-20px;
+    width:80px; height:80px; border-radius:50%;
+    background: var(--glow); pointer-events:none;
+  }
+
+  .tab-btn {
+    padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 500;
+    cursor: pointer; color: #64748b; transition: all 0.12s;
+    white-space: nowrap; line-height: 18px;
+  }
+  .tab-btn:hover { color: #e2e8f0; background: #1a2133; }
+  .tab-btn.active { background: rgba(59,130,246,0.12); color: #60a5fa; }
+
+  .wf-btn {
+    padding: 2px 7px; font-size: 10px; font-weight: 500;
+    cursor: pointer; color: #64748b; transition: all 0.12s;
+    white-space: nowrap; line-height: 18px;
+  }
+  .wf-btn:hover { color: #e2e8f0; background: #1a2133; }
+  .wf-btn.active { background: rgba(59,130,246,0.12); color: #60a5fa; }
+
+  #value-pre { white-space: pre; font-family: 'Geist Mono', monospace; }
+  #value-pre.wrap { white-space: pre-wrap; word-break: break-all; }
+
+  .tree-connector { border-left: 1px solid #1e293b; margin-left: 13px; }
+
+  .resizer { width: 3px; background: #1e293b; cursor: col-resize; flex-shrink: 0; transition: background 0.15s; }
+  .resizer:hover { background: rgba(59,130,246,0.4); }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { animation: spin 0.7s linear infinite; }
+  @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+  .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+</style>
+</head>
+
+<body class="h-screen overflow-hidden flex flex-col">
+
+<header class="h-9 flex items-center gap-2 px-3 bg-bg-card border-b border-bg-border flex-shrink-0 z-30">
+
+  <div class="flex items-center gap-1.5 select-none flex-shrink-0">
+    <div class="w-5 h-5 bg-blue-600 rounded flex items-center justify-center flex-shrink-0">
+      <svg class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.657 4.03 3 9 3s9-1.343 9-3V5"/><path d="M3 12c0 1.657 4.03 3 9 3s9-1.343 9-3"/>
+      </svg>
+    </div>
+    <span class="text-[11px] font-semibold text-slate-200 leading-none">etcd</span>
+    <span class="text-[10px] text-slate-600">browser</span>
+  </div>
+
+  <div class="w-px h-4 bg-bg-border flex-shrink-0"></div>
+
+  <div class="relative flex-1 max-w-xs">
+    <svg class="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-600 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+    </svg>
+    <input id="search-input" type="text" placeholder="Search keys and values…" autocomplete="off" spellcheck="false"
+      class="w-full bg-bg-DEFAULT border border-bg-border rounded text-[11px] font-mono text-slate-600 placeholder-slate-600
+             py-0.5 pl-6 pr-6 h-6 outline-none focus:border-blue-600/60 transition-all">
+    <span id="search-slash" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-700 border border-bg-border rounded px-1 font-mono pointer-events-none">/</span>
+    <button id="search-clear" onclick="clearSearch()" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200 hidden">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <div class="flex items-center gap-2 ml-auto flex-shrink-0">
+    <div style="display:flex;align-items:center;gap:6px;font-size:10px">
+      <span id="conn-dot" style="width:6px;height:6px;border-radius:50%;background:#475569;flex-shrink:0"></span>
+      <span id="conn-text" style="color:#64748b;font-family:'Geist Mono',monospace;font-size:10px">connecting…</span>
+      <span id="readonly-badge" style="display:none;font-size:9px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:3px;padding:1px 6px;letter-spacing:.06em">READ-ONLY</span>
+      <button onclick="showProfiles()" title="Connection profiles" style="margin-left:4px;background:none;border:none;color:#475569;cursor:pointer;padding:2px 4px;border-radius:3px;font-size:10px;display:flex;align-items:center;gap:3px" onmouseenter="this.style.color='#94a3b8'" onmouseleave="this.style.color='#475569'">
+        <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        Profiles
+      </button>
+    </div>
+    <div id="stats-bar" style="display:none;align-items:center;gap:6px;font-size:10px;font-family:'Geist Mono',monospace;color:#64748b">
+      <span id="key-count" style="color:#cbd5e1;font-weight:600">—</span>
+      <span style="color:#334155">keys</span>
+      <span style="color:#1e293b">·</span>
+      <span id="db-size">—</span>
+    </div>
+    <button onclick="showShortcuts()" class="p-1 rounded text-slate-600 hover:text-slate-300 hover:bg-bg-hover transition-all" title="Shortcuts (?)">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
+    </button>
+
+    <div class="w-px h-4 bg-bg-border flex-shrink-0"></div>
+
+    <nav class="flex items-center bg-bg-DEFAULT border border-bg-border rounded overflow-hidden">
+      <button onclick="switchView('explorer')" data-tab="explorer" class="tab-btn active">Explorer</button>
+      <div class="w-px h-3.5 bg-bg-border flex-shrink-0"></div>
+      <button onclick="switchView('search')"   data-tab="search"   class="tab-btn">Search</button>
+      <div class="w-px h-3.5 bg-bg-border flex-shrink-0"></div>
+      <button onclick="switchView('watch')"    data-tab="watch"    class="tab-btn">Watch</button>
+      <div class="w-px h-3.5 bg-bg-border flex-shrink-0"></div>
+      <button onclick="switchView('cluster')"  data-tab="cluster"  class="tab-btn">Cluster</button>
+      <div class="w-px h-3.5 bg-bg-border flex-shrink-0"></div>
+      <button onclick="switchView('auth')"     data-tab="auth"     class="tab-btn">Auth</button>
+      <div class="w-px h-3.5 bg-bg-border flex-shrink-0"></div>
+      <button onclick="switchView('leases')"   data-tab="leases"   class="tab-btn">Leases</button>
+    </nav>
+  </div>
+</header>
+
+<div class="flex flex-1 overflow-hidden">
+
+  <aside id="sidebar" class="flex flex-col border-r border-bg-border flex-shrink-0 bg-bg-card" style="width:220px; min-width:160px; max-width:400px">
+
+    <div class="flex items-center justify-between px-2.5 h-8 border-b border-bg-border flex-shrink-0">
+      <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Key Explorer</span>
+      <div class="flex items-center gap-0.5">
+        <button onclick="showImpExp()" title="Import / Export" style="padding:4px;border-radius:3px;color:#475569;background:none;border:none;cursor:pointer" onmouseenter="this.style.color='#cbd5e1'" onmouseleave="this.style.color='#475569'">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+        <button onclick="showBulkModal()" title="Bulk delete" style="padding:4px;border-radius:3px;color:#475569;background:none;border:none;cursor:pointer" onmouseenter="this.style.color='#f87171'" onmouseleave="this.style.color='#475569'">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+        <button onclick="collapseAll()" title="Collapse all" class="p-1 rounded text-slate-600 hover:text-slate-300 hover:bg-bg-hover transition-all">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16"/></svg>
+        </button>
+        <button onclick="loadTree()" title="Refresh" class="p-1 rounded text-slate-600 hover:text-slate-300 hover:bg-bg-hover transition-all">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="px-2 py-1.5 border-b border-bg-border flex-shrink-0">
+      <input id="prefix-filter" type="text" placeholder="Filter prefix…" spellcheck="false"
+        class="input text-[11px] py-1" oninput="debouncedLoadTree()">
+    </div>
+
+    <div id="tree-container" class="flex-1 overflow-y-auto py-1 px-1">
+      <div class="flex flex-col items-center justify-center gap-2 py-10 text-slate-600 text-[11px]">
+        <svg class="w-3.5 h-3.5 spin text-blue-500 opacity-50" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <span>Loading…</span>
+      </div>
+    </div>
+  </aside>
+
+  <div id="resizer" class="resizer" onmousedown="startResize(event)"></div>
+
+  <main class="flex-1 overflow-hidden flex flex-col min-w-0">
+
+    <div id="view-explorer" class="h-full flex flex-col">
+
+      <div id="exp-empty" class="flex flex-col items-center justify-center h-full gap-3" style="background: radial-gradient(ellipse at center, #161b27 0%, #0d1117 70%)">
+        <div class="card p-8 flex flex-col items-center gap-3 text-center max-w-xs">
+          <div class="w-10 h-10 rounded-full bg-blue-dim border border-blue/20 flex items-center justify-center">
+            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.657 4.03 3 9 3s9-1.343 9-3V5"/><path d="M3 12c0 1.657 4.03 3 9 3s9-1.343 9-3"/>
+            </svg>
+          </div>
+          <div>
+            <p class="text-[13px] font-semibold text-slate-200">Select a key</p>
+            <p class="text-[12px] text-slate-500 mt-1">Click any key in the tree to inspect its value and metadata</p>
+          </div>
+          <div class="flex items-center gap-2 text-[11px] text-slate-600">
+            <kbd class="border border-bg-border rounded px-1.5 py-0.5 bg-bg-hover font-mono">/</kbd>
+            <span>to search</span>
+            <span class="text-slate-700">·</span>
+            <kbd class="border border-bg-border rounded px-1.5 py-0.5 bg-bg-hover font-mono">?</kbd>
+            <span>shortcuts</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="key-detail" class="hidden h-full flex flex-col">
+        <div class="flex-shrink-0 border-b border-bg-border bg-bg-card">
+          <div id="breadcrumb" class="flex items-center gap-1 px-4 pt-3 pb-1 text-[11px] font-mono text-slate-600 flex-wrap min-h-[28px]"></div>
+
+          <div class="flex items-center gap-3 px-4 pb-3">
+            <div id="key-path-display" class="flex-1 text-[13px] font-mono font-semibold text-slate-100 break-all leading-snug"></div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <button onclick="copyKeyPath()" class="btn-ghost text-[11px]">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Copy path
+              </button>
+              <button onclick="reloadKey()" class="btn-ghost text-[11px]">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                Refresh
+              </button>
+              <button onclick="showEditModal()" class="btn-primary text-[11px]">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Edit
+              </button>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 px-4 pb-3 flex-wrap">
+            <div class="flex items-center gap-1.5 text-[11px]">
+              <span class="text-slate-600">Version</span>
+              <span id="m-version" class="badge-muted"></span>
+            </div>
+            <span class="text-slate-800">·</span>
+            <div class="flex items-center gap-1.5 text-[11px]">
+              <span class="text-slate-600">Created rev</span>
+              <span id="m-crev" class="badge-muted font-mono"></span>
+            </div>
+            <span class="text-slate-800">·</span>
+            <div class="flex items-center gap-1.5 text-[11px]">
+              <span class="text-slate-600">Mod rev</span>
+              <span id="m-mrev" class="badge-muted font-mono"></span>
+            </div>
+            <span class="text-slate-800">·</span>
+            <div class="flex items-center gap-1.5 text-[11px]">
+              <span class="text-slate-600">Size</span>
+              <span id="m-size" class="badge-blue"></span>
+            </div>
+            <div id="m-ttl-wrap" class="hidden flex items-center gap-1.5 text-[11px]">
+              <span class="text-slate-800">·</span>
+              <span class="text-slate-600">TTL</span>
+              <span id="m-ttl" class="badge-amber"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 px-4 py-2 border-b border-bg-border bg-bg-DEFAULT flex-shrink-0">
+          <span id="vtype-badge" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:999px;border-width:1px;border-style:solid">text</span>
+          <div id="mode-tabs" class="flex items-center gap-0.5 border border-bg-border rounded-md p-0.5 bg-bg-card" style="display:none">
+            <button onclick="setMode('pretty')" id="mode-pretty" style="padding:2px 8px;font-size:11px;font-weight:500;border-radius:3px;background:rgba(59,130,246,0.12);color:#60a5fa;cursor:pointer;border:none">Pretty</button>
+            <button onclick="setMode('raw')"    id="mode-raw"    style="padding:2px 8px;font-size:11px;font-weight:500;border-radius:3px;background:transparent;color:#64748b;cursor:pointer;border:none">Raw</button>
+          </div>
+
+          <div id="binary-tabs" class="flex items-center gap-0.5 border border-bg-border rounded-md p-0.5 bg-bg-card" style="display:none">
+            <button onclick="setBinaryMode('hex')"    id="bmode-hex"    style="padding:2px 8px;font-size:11px;font-weight:500;border-radius:3px;background:rgba(239,68,68,0.12);color:#f87171;cursor:pointer;border:none">Hex</button>
+            <button onclick="setBinaryMode('base64')" id="bmode-base64" style="padding:2px 8px;font-size:11px;font-weight:500;border-radius:3px;background:transparent;color:#64748b;cursor:pointer;border:none">Base64</button>
+            <button onclick="setBinaryMode('json')"   id="bmode-json"   style="display:none;padding:2px 8px;font-size:11px;font-weight:500;border-radius:3px;background:transparent;color:#64748b;cursor:pointer;border:none">JSON</button>
+          </div>
+          <div class="ml-auto flex items-center gap-1.5">
+            <button onclick="toggleWrap()" id="wrap-btn" class="btn-ghost text-[11px]">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+              Word wrap
+            </button>
+            <button onclick="copyValue()" id="copy-val-btn" class="btn-primary text-[11px]">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy value
+            </button>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-auto">
+
+          <div id="binary-viewer" style="display:none;padding:16px">
+            <div id="binary-hint-banner" style="display:flex;align-items:center;gap:8px;background:#1a1a2e;border:1px solid rgba(239,68,68,0.2);border-radius:6px;padding:10px 14px;margin-bottom:14px">
+              <svg width="14" height="14" fill="none" stroke="#f87171" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+              <span id="binary-hint-text" style="font-size:11px;color:#f87171;font-weight:600"></span>
+              <span style="font-size:11px;color:#64748b;margin-left:4px">— binary data cannot be edited. Use hex or base64 view to inspect the raw bytes.</span>
+            </div>
+            <pre id="binary-hex"    style="font-size:11.5px;font-family:'Geist Mono',monospace;line-height:1.7;color:#94a3b8;background:#0d1117;border:1px solid #1e293b;border-radius:6px;padding:14px;overflow:auto"></pre>
+            <pre id="binary-base64" style="display:none;font-size:11.5px;font-family:'Geist Mono',monospace;line-height:1.7;color:#94a3b8;background:#0d1117;border:1px solid #1e293b;border-radius:6px;padding:14px;overflow:auto;word-break:break-all;white-space:pre-wrap"></pre>
+            <pre id="binary-json"   style="display:none;font-size:12px;font-family:'Geist Mono',monospace;line-height:1.7;background:#0d1117;border:1px solid #1e293b;border-radius:6px;padding:14px;overflow:auto"></pre>
+          </div>
+          <div id="text-viewer" class="p-4">
+            <pre id="value-pre" class="text-[12.5px] font-mono leading-relaxed text-slate-300"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-search" class="hidden h-full flex flex-col">
+      <div class="flex items-center gap-3 px-4 h-10 border-b border-bg-border bg-bg-card flex-shrink-0">
+        <p id="search-status" class="text-[12px] text-slate-500">Search keys and values</p>
+        <span id="search-count" class="ml-auto text-[11px] text-slate-600 font-mono"></span>
+      </div>
+      <div id="results-list" class="flex-1 overflow-y-auto p-4">
+        <div class="flex flex-col items-center justify-center gap-3 h-full py-20 text-slate-600">
+          <svg class="w-8 h-8 opacity-30" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <p class="text-[13px]">Search across all keys and values</p>
+          <p class="text-[11px] text-slate-700">Results update as you type · searches key path and value content</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-watch" class="hidden h-full flex flex-col">
+
+      <div class="flex items-center gap-2 px-3 h-8 border-b border-bg-border bg-bg-card flex-shrink-0 min-w-0">
+        <button id="watch-btn" onclick="toggleWatch()" class="btn-primary">
+          <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Start
+        </button>
+        <input id="watch-prefix" type="text" value="" placeholder="prefix…"
+          class="bg-bg-DEFAULT border border-bg-border rounded text-[10px] font-mono text-slate-300 placeholder-slate-700
+                 px-2 h-6 w-28 outline-none focus:border-blue-600/50 transition-all flex-shrink-0" spellcheck="false">
+        <div class="w-px h-3.5 bg-bg-border flex-shrink-0"></div>
+        <span id="watch-dot" class="w-1.5 h-1.5 rounded-full bg-slate-700 flex-shrink-0"></span>
+        <span id="watch-label" class="text-[10px] text-slate-500 flex-shrink-0">Idle</span>
+        <div class="w-px h-3.5 bg-bg-border flex-shrink-0"></div>
+        <div class="flex items-center border border-bg-border rounded overflow-hidden flex-shrink-0">
+          <button onclick="setWatchFilter('all')"    data-wf="all"    class="wf-btn active">All</button>
+          <button onclick="setWatchFilter('PUT')"    data-wf="PUT"    class="wf-btn border-l border-bg-border">PUT</button>
+          <button onclick="setWatchFilter('DELETE')" data-wf="DELETE" class="wf-btn border-l border-bg-border">DEL</button>
+        </div>
+        <span class="text-[10px] font-mono flex-shrink-0">
+          <span class="text-green font-semibold" id="put-count">0</span><span class="text-slate-700"> put</span>
+          <span class="text-slate-800 mx-1">·</span>
+          <span class="text-red font-semibold" id="del-count">0</span><span class="text-slate-700"> del</span>
+        </span>
+        <button onclick="clearEvents()" class="ml-auto btn-ghost">
+          <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          Clear
+        </button>
+      </div>
+
+      <div class="grid text-[10px] font-semibold uppercase tracking-wider text-slate-600 bg-bg-card border-b border-bg-border px-4 py-2 flex-shrink-0" style="grid-template-columns:60px 60px 1fr 180px 80px">
+        <div>Type</div>
+        <div>Rev</div>
+        <div>Key</div>
+        <div>Value preview</div>
+        <div>Time</div>
+      </div>
+
+      <div id="events-feed" class="flex-1 overflow-y-auto">
+        <div id="watch-idle" class="flex flex-col items-center justify-center gap-3 h-full py-20 text-slate-600">
+          <div class="w-12 h-12 rounded-full border-2 border-bg-border flex items-center justify-center">
+            <svg class="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </div>
+          <p class="text-[13px]">Real-time event stream</p>
+          <p class="text-[11px] text-slate-700">Start watching to see mutations as they happen</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-cluster" class="hidden h-full overflow-y-auto">
+      <div id="cluster-content" class="p-6 max-w-5xl mx-auto space-y-6">
+        <div class="flex items-center justify-center py-20">
+          <svg class="w-6 h-6 spin text-blue-500" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-auth" class="hidden h-full overflow-y-auto">
+      <div id="auth-content" style="padding:24px;max-width:1100px;margin:0 auto">
+        <div id="auth-loading" style="display:flex;align-items:center;justify-content:center;padding:80px 0">
+          <svg style="width:20px;height:20px;animation:spin 0.7s linear infinite;color:#3b82f6;opacity:0.5" fill="none" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
+            <path fill="currentColor" opacity="0.75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+        </div>
+
+        <div id="auth-status-bar" style="display:none;align-items:center;justify-content:space-between;background:#161b27;border:1px solid #1e293b;border-radius:8px;padding:14px 20px;margin-bottom:24px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span id="auth-status-dot" style="width:8px;height:8px;border-radius:50%;background:#334155;flex-shrink:0"></span>
+            <span style="font-size:13px;font-weight:600;color:#f1f5f9">Authentication</span>
+            <span id="auth-status-label" style="font-size:11px;color:#64748b;background:#0d1117;border:1px solid #1e293b;border-radius:4px;padding:1px 8px;font-family:monospace">checking…</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button id="auth-toggle-btn" onclick="toggleAuth()" class="btn-ghost" style="display:none">Enable Auth</button>
+            <button onclick="loadAuth()" class="btn-ghost">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div id="auth-panels" style="display:none;gap:20px;grid-template-columns:1fr 1fr">
+
+          <div style="background:#161b27;border:1px solid #1e293b;border-radius:8px;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1e293b">
+              <span style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#64748b">Users</span>
+              <button onclick="showAddUser()" class="btn-primary">
+                <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add user
+              </button>
+            </div>
+            <div id="users-list" style="min-height:80px"></div>
+          </div>
+
+          <div style="background:#161b27;border:1px solid #1e293b;border-radius:8px;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1e293b">
+              <span style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#64748b">Roles</span>
+              <button onclick="showAddRole()" class="btn-primary">
+                <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add role
+              </button>
+            </div>
+            <div id="roles-list" style="min-height:80px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div id="profiles-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(13,17,23,0.8);backdrop-filter:blur(4px)" onclick="hideProfiles()">
+  <div style="background:#161b27;border:1px solid #1e293b;border-radius:10px;padding:20px;width:500px;max-width:95vw;box-shadow:0 25px 50px rgba(0,0,0,0.6)" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:13px;font-weight:600;color:#f1f5f9">Connection profiles</span>
+      <button onclick="hideProfiles()" style="background:none;border:none;color:#64748b;cursor:pointer"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div id="profiles-list" style="margin-bottom:14px;max-height:200px;overflow-y:auto"></div>
+    <div style="background:#0d1117;border:1px solid #1e293b;border-radius:6px;padding:14px">
+      <div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Save current connection</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <label style="font-size:10px;color:#64748b;display:block;margin-bottom:3px">Profile name</label>
+          <input id="prof-name" class="input" placeholder="e.g. Production" spellcheck="false">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#64748b;display:block;margin-bottom:3px">Endpoint</label>
+          <input id="prof-endpoint" class="input" placeholder="localhost:2379" spellcheck="false">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:10px;color:#64748b;display:block;margin-bottom:3px">Username <span style="color:#334155">(optional)</span></label>
+          <input id="prof-user" class="input" placeholder="root" spellcheck="false">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#64748b;display:block;margin-bottom:3px">Note <span style="color:#334155">(optional)</span></label>
+          <input id="prof-note" class="input" placeholder="staging cluster" spellcheck="false">
+        </div>
+      </div>
+      <button onclick="saveProfile()" class="btn-primary" style="width:100%;justify-content:center">Save profile</button>
+    </div>
+    <div style="margin-top:10px;font-size:10px;color:#475569">💡 Profiles are saved in your browser. Switching to a profile opens the UI pointed at that endpoint.</div>
+  </div>
+</div>
+<div id="bulk-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(13,17,23,0.8);backdrop-filter:blur(4px)" onclick="hideBulkModal()">
+  <div style="background:#161b27;border:1px solid #1e293b;border-radius:10px;padding:20px;width:480px;max-width:95vw;box-shadow:0 25px 50px rgba(0,0,0,0.6)" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:13px;font-weight:600;color:#f1f5f9">Bulk delete</span>
+      <button onclick="hideBulkModal()" style="background:none;border:none;color:#64748b;cursor:pointer"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div style="background:#0d1117;border:1px solid rgba(239,68,68,0.2);border-radius:6px;padding:12px;margin-bottom:14px">
+      <div style="font-size:11px;color:#f87171;margin-bottom:6px;font-weight:600">⚠️ This will permanently delete all keys under the prefix</div>
+      <div style="font-size:11px;color:#94a3b8">All keys matching the prefix below will be deleted. This cannot be undone.</div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px">Prefix to delete</label>
+      <input id="bulk-prefix" class="input" placeholder="e.g. /tmp/ or /services/dev/" spellcheck="false">
+    </div>
+    <div id="bulk-preview" style="display:none;background:#0d1117;border:1px solid #1e293b;border-radius:5px;padding:10px;margin-bottom:12px;max-height:120px;overflow-y:auto;font-size:11px;font-family:monospace;color:#94a3b8"></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="previewBulk()" class="btn-ghost" style="flex:1;justify-content:center">Preview</button>
+      <button onclick="confirmBulk()" class="btn-danger" style="flex:1;justify-content:center">Delete all matching</button>
+      <button onclick="hideBulkModal()" class="btn-ghost">Cancel</button>
+    </div>
+    <div id="bulk-err" style="display:none;margin-top:10px;font-size:11px;color:#f87171;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:4px;padding:6px 10px"></div>
+  </div>
+</div>
+
+<div id="view-leases" class="hidden h-full overflow-y-auto">
+  <div style="padding:24px;max-width:900px;margin:0 auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="font-size:14px;font-weight:600;color:#f1f5f9">Active Leases</h2>
+      <div style="display:flex;gap:8px">
+        <button onclick="loadLeases()" class="btn-ghost">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+          Refresh
+        </button>
+      </div>
+    </div>
+    <div id="leases-content" style="min-height:100px"></div>
+  </div>
+</div>
+
+<div id="history-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(13,17,23,0.8);backdrop-filter:blur(4px)" onclick="hideHistoryModal()">
+  <div style="background:#161b27;border:1px solid #1e293b;border-radius:10px;padding:20px;width:640px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.6)" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
+      <div>
+        <span style="font-size:13px;font-weight:600;color:#f1f5f9">Key history</span>
+        <div id="hist-key" style="font-size:11px;color:#60a5fa;font-family:monospace;margin-top:2px"></div>
+      </div>
+      <button onclick="hideHistoryModal()" style="background:none;border:none;color:#64748b;cursor:pointer"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div id="hist-content" style="overflow-y:auto;flex:1"></div>
+  </div>
+</div>
+
+<div id="impexp-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(13,17,23,0.8);backdrop-filter:blur(4px)" onclick="hideImpExp()">
+  <div style="background:#161b27;border:1px solid #1e293b;border-radius:10px;padding:20px;width:520px;max-width:95vw;box-shadow:0 25px 50px rgba(0,0,0,0.6)" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:13px;font-weight:600;color:#f1f5f9">Import / Export</span>
+      <button onclick="hideImpExp()" style="background:none;border:none;color:#64748b;cursor:pointer"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+
+    <div style="background:#0d1117;border:1px solid #1e293b;border-radius:6px;padding:14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:#94a3b8;margin-bottom:10px">Export keys to JSON</div>
+      <div style="display:flex;gap:8px">
+        <input id="export-prefix" class="input" placeholder="Prefix filter (empty = all keys)" spellcheck="false" style="flex:1">
+        <button onclick="doExport()" class="btn-primary">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </button>
+      </div>
+    </div>
+
+    <div style="background:#0d1117;border:1px solid #1e293b;border-radius:6px;padding:14px">
+      <div style="font-size:11px;font-weight:600;color:#94a3b8;margin-bottom:10px">Import from JSON file</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="import-file" type="file" accept=".json" style="flex:1;font-size:11px;color:#94a3b8;background:transparent;border:1px solid #1e293b;border-radius:4px;padding:4px 8px;cursor:pointer">
+        <button onclick="doImport()" class="btn-primary">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Import
+        </button>
+      </div>
+      <div id="import-status" style="display:none;margin-top:8px;font-size:11px;color:#4ade80"></div>
+    </div>
+    <div id="impexp-err" style="display:none;margin-top:10px;font-size:11px;color:#f87171;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:4px;padding:6px 10px"></div>
+  </div>
+</div>
+
+<div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(13,17,23,0.75);backdrop-filter:blur(4px)" onclick="hideShortcuts()">
+  <div style="background:#161b27;border:1px solid #1e293b;border-radius:10px;padding:20px;width:280px;box-shadow:0 25px 50px rgba(0,0,0,0.6)" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:13px;font-weight:600;color:#f1f5f9">Keyboard shortcuts</span>
+      <button onclick="hideShortcuts()" style="color:#64748b;background:none;border:none;cursor:pointer;padding:2px">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div style="font-size:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b"><span style="color:#94a3b8">Focus search</span><kbd style="background:#1a2133;border:1px solid #1e293b;border-radius:4px;padding:1px 7px;font-family:monospace;color:#60a5fa;font-size:11px">/</kbd></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b"><span style="color:#94a3b8">Refresh tree</span><kbd style="background:#1a2133;border:1px solid #1e293b;border-radius:4px;padding:1px 7px;font-family:monospace;color:#60a5fa;font-size:11px">R</kbd></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b"><span style="color:#94a3b8">Explorer</span><kbd style="background:#1a2133;border:1px solid #1e293b;border-radius:4px;padding:1px 7px;font-family:monospace;color:#60a5fa;font-size:11px">E</kbd></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b"><span style="color:#94a3b8">Watch</span><kbd style="background:#1a2133;border:1px solid #1e293b;border-radius:4px;padding:1px 7px;font-family:monospace;color:#60a5fa;font-size:11px">W</kbd></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1e293b"><span style="color:#94a3b8">Cluster</span><kbd style="background:#1a2133;border:1px solid #1e293b;border-radius:4px;padding:1px 7px;font-family:monospace;color:#60a5fa;font-size:11px">C</kbd></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0"><span style="color:#94a3b8">Shortcuts</span><kbd style="background:#1a2133;border:1px solid #1e293b;border-radius:4px;padding:1px 7px;font-family:monospace;color:#60a5fa;font-size:11px">?</kbd></div>
+    </div>
+  </div>
+</div>
+
+<div id="edit-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(13,17,23,0.8);backdrop-filter:blur(4px)" onclick="hideEditModal()">
+  <div style="background:#161b27;border:1px solid #1e293b;border-radius:10px;padding:20px;width:560px;max-width:95vw;box-shadow:0 25px 50px rgba(0,0,0,0.6)" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:13px;font-weight:600;color:#f1f5f9">Edit key</span>
+      <button onclick="hideEditModal()" style="color:#64748b;background:none;border:none;cursor:pointer;padding:2px">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#64748b;display:block;margin-bottom:4px">Key</label>
+      <div id="edit-key-display" style="font-family:'Geist Mono',monospace;font-size:12px;color:#60a5fa;background:#0d1117;border:1px solid #1e293b;border-radius:5px;padding:6px 10px;word-break:break-all"></div>
+    </div>
+
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#64748b">Value</label>
+        <button onclick="formatEditJson()" id="fmt-btn" style="font-size:10px;color:#60a5fa;background:none;border:none;cursor:pointer;padding:0">Format JSON</button>
+      </div>
+      <textarea id="edit-value" rows="10" spellcheck="false"
+        style="width:100%;background:#0d1117;border:1px solid #1e293b;border-radius:5px;padding:8px 10px;font-family:'Geist Mono',monospace;font-size:12px;color:#e2e8f0;outline:none;resize:vertical;transition:border-color .15s;line-height:1.6"
+        onfocus="this.style.borderColor='rgba(59,130,246,0.5)'" onblur="this.style.borderColor='#1e293b'"></textarea>
+    </div>
+
+    <div style="margin-bottom:16px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#64748b;display:block;margin-bottom:4px">TTL (seconds) <span style="color:#334155;text-transform:none;font-weight:400">— 0 or empty = keep current / no expiry</span></label>
+      <input id="edit-ttl" class="input" type="number" min="0" placeholder="e.g. 30  (leave empty to keep existing TTL)">
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px">
+      <button onclick="saveEdit()" class="btn-primary" style="flex:1;justify-content:center">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        Save changes
+      </button>
+      <button onclick="confirmDelete()" class="btn-danger">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        Delete key
+      </button>
+      <button onclick="hideEditModal()" class="btn-ghost">Cancel</button>
+      <button onclick="showKeyHistory()" class="btn-ghost" title="View revision history">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
+        History
+      </button>
+    </div>
+    <div id="edit-error" style="display:none;margin-top:10px;font-size:11px;color:#f87171;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:4px;padding:6px 10px"></div>
+  </div>
+</div>
+
+<div id="add-user-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(13,17,23,0.8);backdrop-filter:blur(4px)" onclick="hideAuthModal('add-user-modal')">
+  <div style="background:#161b27;border:1px solid #1e293b;border-radius:10px;padding:20px;width:380px;box-shadow:0 25px 50px rgba(0,0,0,0.6)" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:13px;font-weight:600;color:#f1f5f9">Add user</span>
+      <button onclick="hideAuthModal('add-user-modal')" style="background:none;border:none;color:#64748b;cursor:pointer"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div style="margin-bottom:10px"><label style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px">Username</label>
+      <input id="new-user-name" class="input" placeholder="e.g. alice" spellcheck="false"></div>
+    <div style="margin-bottom:16px"><label style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px">Password</label>
+      <input id="new-user-pass" class="input" type="password" placeholder="Password"></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="addUser()" class="btn-primary" style="flex:1;justify-content:center">Create user</button>
+      <button onclick="hideAuthModal('add-user-modal')" class="btn-ghost">Cancel</button>
+    </div>
+    <div id="add-user-err" style="display:none;margin-top:10px;font-size:11px;color:#f87171;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:4px;padding:6px 10px"></div>
+  </div>
+</div>
+
+<div id="user-detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(13,17,23,0.8);backdrop-filter:blur(4px)" onclick="hideAuthModal('user-detail-modal')">
+  <div style="background:#161b27;border:1px solid #1e293b;border-radius:10px;padding:20px;width:460px;box-shadow:0 25px 50px rgba(0,0,0,0.6)" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:13px;font-weight:600;color:#f1f5f9">User: <span id="ud-name" style="color:#60a5fa;font-family:monospace"></span></span>
+      <button onclick="hideAuthModal('user-detail-modal')" style="background:none;border:none;color:#64748b;cursor:pointer"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div style="margin-bottom:16px">
+      <div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Roles</div>
+      <div id="ud-roles" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:24px"></div>
+      <div style="display:flex;gap:6px">
+        <select id="ud-grant-role" style="flex:1;background:#0d1117;border:1px solid #1e293b;border-radius:5px;color:#e2e8f0;font-size:11px;padding:4px 8px;outline:none"><option value="">Select role to grant…</option></select>
+        <button onclick="grantRoleToUser()" class="btn-primary">Grant</button>
+      </div>
+    </div>
+    <div style="background:#0d1117;border:1px solid #1e293b;border-radius:6px;padding:12px;margin-bottom:16px">
+      <div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Change password</div>
+      <div style="display:flex;gap:6px">
+        <input id="ud-new-pass" class="input" type="password" placeholder="New password" style="flex:1">
+        <button onclick="changeUserPassword()" class="btn-ghost">Update</button>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <button onclick="deleteUser()" class="btn-danger">
+        <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        Delete user
+      </button>
+      <button onclick="hideAuthModal('user-detail-modal')" class="btn-ghost">Close</button>
+    </div>
+    <div id="ud-err" style="display:none;margin-top:10px;font-size:11px;color:#f87171;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:4px;padding:6px 10px"></div>
+  </div>
+</div>
+
+<div id="add-role-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(13,17,23,0.8);backdrop-filter:blur(4px)" onclick="hideAuthModal('add-role-modal')">
+  <div style="background:#161b27;border:1px solid #1e293b;border-radius:10px;padding:20px;width:360px;box-shadow:0 25px 50px rgba(0,0,0,0.6)" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:13px;font-weight:600;color:#f1f5f9">Add role</span>
+      <button onclick="hideAuthModal('add-role-modal')" style="background:none;border:none;color:#64748b;cursor:pointer"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div style="margin-bottom:16px"><label style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px">Role name</label>
+      <input id="new-role-name" class="input" placeholder="e.g. read-only" spellcheck="false"></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="addRole()" class="btn-primary" style="flex:1;justify-content:center">Create role</button>
+      <button onclick="hideAuthModal('add-role-modal')" class="btn-ghost">Cancel</button>
+    </div>
+    <div id="add-role-err" style="display:none;margin-top:10px;font-size:11px;color:#f87171;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:4px;padding:6px 10px"></div>
+  </div>
+</div>
+
+<div id="role-detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(13,17,23,0.8);backdrop-filter:blur(4px)" onclick="hideAuthModal('role-detail-modal')">
+  <div style="background:#161b27;border:1px solid #1e293b;border-radius:10px;padding:20px;width:520px;box-shadow:0 25px 50px rgba(0,0,0,0.6)" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:13px;font-weight:600;color:#f1f5f9">Role: <span id="rd-name" style="color:#a78bfa;font-family:monospace"></span></span>
+      <button onclick="hideAuthModal('role-detail-modal')" style="background:none;border:none;color:#64748b;cursor:pointer"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div style="margin-bottom:16px">
+      <div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Permissions</div>
+      <div id="rd-perms" style="min-height:32px;margin-bottom:8px"></div>
+    </div>
+    <div style="background:#0d1117;border:1px solid #1e293b;border-radius:6px;padding:14px;margin-bottom:16px">
+      <div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Grant permission</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <label style="font-size:10px;color:#64748b;display:block;margin-bottom:3px">Key / prefix</label>
+          <input id="rd-key" class="input" placeholder='e.g. /app/' spellcheck="false">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#64748b;display:block;margin-bottom:3px">Range end <span style="color:#334155">(empty = exact)</span></label>
+          <input id="rd-range-end" class="input" placeholder='e.g. /app0 or \x00 for prefix' spellcheck="false">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div style="flex:1">
+          <label style="font-size:10px;color:#64748b;display:block;margin-bottom:3px">Permission</label>
+          <select id="rd-perm-type" style="width:100%;background:#161b27;border:1px solid #1e293b;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none">
+            <option value="READWRITE">READ + WRITE</option>
+            <option value="READ">READ only</option>
+            <option value="WRITE">WRITE only</option>
+          </select>
+        </div>
+        <button onclick="grantPermission()" class="btn-primary">Grant</button>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <button onclick="deleteRole()" class="btn-danger">
+        <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        Delete role
+      </button>
+      <button onclick="hideAuthModal('role-detail-modal')" class="btn-ghost">Close</button>
+    </div>
+    <div id="rd-err" style="display:none;margin-top:10px;font-size:11px;color:#f87171;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:4px;padding:6px 10px"></div>
+  </div>
+</div>
+
+<div id="toast" class="hidden fixed bottom-4 right-4 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-bg-card border border-bg-border text-[12px] text-slate-200 shadow-2xl" style="transition: opacity 0.2s, transform 0.2s">
+  <svg id="toast-icon" class="w-4 h-4 text-green flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+  <span id="toast-msg"></span>
+</div>
+
+<script>
+const S = {
+  view: 'explorer',
+  treeData: [],
+  expanded: new Set(),
+  selectedKey: null,
+  keyNode: null,
+  valueMode: 'pretty',
+  binaryMode: 'hex',
+  wrap: false,
+  watchActive: false,
+  watchES: null,
+  watchFilter: 'all',
+  putCount: 0,
+  delCount: 0,
+  clusterInfo: null,
+  watchHistory: [],       // persisted across page reload via sessionStorage
+};
+
+// Restore watch history from session
+try {
+  const saved = sessionStorage.getItem('etcd-watch-history');
+  if (saved) S.watchHistory = JSON.parse(saved);
+} catch(e) {}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setupSearch();
+  setupKeyboard();
+  setupResize();
+  loadTree();
+  loadCluster();
+  switchView('explorer');
+  setWatchFilter('all');
+});
+
+async function get(url) {
+  const r = await fetch(url);
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error || r.statusText); }
+  return r.json();
+}
+
+async function loadCluster() {
+  try {
+    const r = await fetch('/api/cluster');
+    if (!r.ok) { console.error('cluster API', r.status, await r.text()); updateStatus({connected:false}); return; }
+    const d = await r.json();
+    S.clusterInfo = d;
+    updateStatus(d);
+    if (S.view === 'cluster') renderCluster(d);
+  } catch(e) { console.error('loadCluster:', e); updateStatus({ connected: false }); }
+  setTimeout(loadCluster, 10000);
+}
+
+function updateStatus(info) {
+  const dot  = document.getElementById('conn-dot');
+  const text = document.getElementById('conn-text');
+  const bar  = document.getElementById('stats-bar');
+  if (info.connected) {
+    dot.style.cssText   = 'width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 5px #22c55e;flex-shrink:0';
+    text.textContent    = info.endpoints?.[0] || 'connected';
+    text.style.cssText  = 'color:#4ade80;font-family:"Geist Mono",monospace;font-size:10px';
+    bar.style.display   = 'flex';
+    // Show read-only badge if server is in read-only mode
+    if (info.read_only) {
+      document.getElementById('readonly-badge').style.display = '';
+    }
+    document.getElementById('key-count').textContent = info.key_count ?? '—';
+    document.getElementById('db-size').textContent   = info.db_size_human || '—';
+  } else {
+    dot.style.cssText   = 'width:6px;height:6px;border-radius:50%;background:#ef4444;flex-shrink:0';
+    text.textContent    = 'disconnected';
+    text.style.cssText  = 'color:#f87171;font-family:"Geist Mono",monospace;font-size:10px';
+    bar.style.display   = 'none';
+  }
+}
+
+function renderCluster(info) {
+  const members = info.members || [];
+  const leader = members.find(m => m.is_leader);
+  const leaderName = leader ? esc(leader.name || ('0x' + (leader.id||0).toString(16))) : '—';
+  document.getElementById('cluster-content').innerHTML = `
+    <div>
+      <h1 class="text-[18px] font-semibold text-slate-100 mb-1">Cluster Overview</h1>
+      <p class="text-[13px] text-slate-500 mb-6">Connected to ${esc(info.endpoints?.[0] || 'etcd')}</p>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        ${sc('Status', info.connected ? 'Online' : 'Offline', info.endpoints?.[0] || '—', 'green')}
+        ${sc('Total Keys', String(info.key_count ?? '—'), 'in database', 'blue')}
+        ${sc('DB Size', info.db_size_human || '—', `${(info.db_size||0).toLocaleString()} bytes`, 'violet')}
+        ${sc('Version', info.version || '—', `${members.length} member${members.length!==1?'s':''}`, 'amber')}
+      </div>
+      ${members.length > 1 ? `
+      <div style="background:#161b27;border:1px solid #1e293b;border-radius:8px;padding:14px 18px;margin-bottom:24px;display:flex;align-items:center;gap:10px">
+        <svg width="14" height="14" fill="none" stroke="#a78bfa" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span style="font-size:11px;color:#64748b">Current Raft leader:</span>
+        <span style="font-size:12px;font-weight:600;color:#a78bfa;font-family:monospace">${leaderName}</span>
+        ${leader?.client_urls?.[0] ? `<span style="font-size:10px;color:#475569;font-family:monospace">${esc(leader.client_urls[0])}</span>` : ''}
+      </div>` : ''}
+    </div>
+
+    <div>
+      <h2 class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 mb-3">Members</h2>
+      <div class="card overflow-hidden">
+        <table class="w-full text-[12px]">
+          <thead>
+            <tr class="border-b border-bg-border">
+              <th class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">Name</th>
+              <th class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">Member ID</th>
+              <th class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">Client URLs</th>
+              <th class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">Peer URLs</th>
+              <th class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">Role</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${members.map((m,i) => `
+            <tr class="${i!==members.length-1?'border-b border-bg-border':''} hover:bg-bg-hover transition-colors">
+              <td class="px-4 py-3 font-semibold text-slate-200">${esc(m.name||'(unnamed)')}</td>
+              <td class="px-4 py-3 font-mono text-[11px] text-slate-500">${(m.id||0).toString(16).padStart(16,'0')}</td>
+              <td class="px-4 py-3 font-mono text-blue-400">${(m.client_urls||[]).join('<br>') || '<span class="text-slate-600">—</span>'}</td>
+              <td class="px-4 py-3 font-mono text-slate-500 text-[11px]">${(m.peer_urls||[]).join('<br>') || '<span class="text-slate-600">—</span>'}</td>
+              <td class="px-4 py-3">${m.is_learner ? '<span class="badge-amber">Learner</span>' : m.is_leader ? '<span class="badge-violet">Leader</span>' : '<span class="badge-green">Voter</span>'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 mb-3">Endpoints</h2>
+      <div class="flex flex-wrap gap-2">
+        ${(info.endpoints||[]).map(e=>`
+          <div class="flex items-center gap-2 px-3 py-2 card text-[12px] font-mono text-blue-400">
+            <span class="w-1.5 h-1.5 rounded-full bg-green"></span>${esc(e)}
+          </div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function sc(label, value, sub, color) {
+  const c = {
+    green:  { val:'text-green-300',  glow:'rgba(34,197,94,0.12)'  },
+    blue:   { val:'text-blue-300',   glow:'rgba(59,130,246,0.12)' },
+    amber:  { val:'text-amber-300',  glow:'rgba(245,158,11,0.12)' },
+    violet: { val:'text-violet-300', glow:'rgba(139,92,246,0.12)' },
+  }[color] || { val:'text-slate-200', glow:'transparent' };
+  return `
+    <div class="stat-card" style="--glow:radial-gradient(circle at top right,${c.glow},transparent)">
+      <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-3">${esc(label)}</p>
+      <p class="text-[22px] font-bold leading-none mb-2 ${c.val}">${esc(value)}</p>
+      <p class="text-[11px] text-slate-600">${esc(sub)}</p>
+    </div>`;
+}
+
+let treeTimer;
+function debouncedLoadTree() { clearTimeout(treeTimer); treeTimer = setTimeout(loadTree, 360); }
+
+async function loadTree() {
+  const prefix = document.getElementById('prefix-filter').value.trim();
+  const box = document.getElementById('tree-container');
+  box.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:40px 0;color:#475569;font-size:11px"><svg style="width:16px;height:16px;animation:spin 0.7s linear infinite;color:#3b82f6;opacity:0.5" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/><path fill="currentColor" opacity="0.75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg><span>Loading…</span></div>';
+  try {
+    const url = prefix ? `/api/tree?prefix=${encodeURIComponent(prefix)}` : '/api/tree';
+    const d = await get(url);
+    S.treeData = d.tree || [];
+    renderTree();
+  } catch (e) {
+    box.innerHTML = '<div style="padding:12px;font-size:11px;color:#f87171;font-family:Geist Mono,monospace">' + esc(e.message) + '</div>';
+  }
+}
+
+function renderTree() {
+  const box = document.getElementById('tree-container');
+  if (!S.treeData.length) {
+    box.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:40px 0;color:#475569;font-size:11px"><svg style="width:24px;height:24px;opacity:0.3" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>No keys found</div>';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  S.treeData.forEach(n => buildNode(n, frag, 0));
+  box.innerHTML = '';
+  box.appendChild(frag);
+}
+
+function buildNode(node, parent, depth) {
+  const expanded = S.expanded.has(node.key);
+  const selected = node.key === S.selectedKey;
+  const base = node.key.split('/').filter(Boolean).pop() || node.key;
+
+  const row = document.createElement('div');
+  row.className = `tree-row${selected?' selected':''}`;
+  row.style.paddingLeft = `${depth*14+8}px`;
+  row.dataset.key = node.key;
+
+  const chev = document.createElement('span');
+  chev.style.cssText = 'width:12px;height:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform 0.15s';
+  if (node.is_dir) {
+    chev.innerHTML = `<svg class="w-2 h-2 text-slate-600 transition-transform ${expanded?'rotate-90':''}" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>`;
+  } else {
+    chev.innerHTML = `<span class="w-1 h-1 rounded-full bg-slate-700 mx-auto"></span>`;
+  }
+
+  const icon = document.createElement('span');
+  icon.style.cssText = 'width:12px;height:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0';
+  if (node.is_dir) {
+    icon.innerHTML = `<svg class="w-3 h-3 text-blue-500/60" fill="currentColor" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9L9 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg>`;
+  } else if (node.value_type === 'json') {
+    icon.innerHTML = `<svg class="w-2.5 h-2.5 text-blue-400/50" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 8h-.6A1.4 1.4 0 0 0 5 9.4v5.2A1.4 1.4 0 0 0 6.4 16H7M17 8h.6a1.4 1.4 0 0 1 1.4 1.4v5.2a1.4 1.4 0 0 1-1.4 1.4H17M11 12h2"/></svg>`;
+  } else {
+    icon.innerHTML = `<svg class="w-2.5 h-2.5 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+  }
+
+  const lbl = document.createElement('span');
+  lbl.className = 'flex-1 truncate font-mono';
+  lbl.style.color = node.is_dir ? '#cbd5e1' : '#94a3b8';
+  if (node.is_dir) lbl.style.fontWeight = '500';
+  lbl.title = node.key;
+  lbl.textContent = base;
+
+  const bwrap = document.createElement('span');
+  bwrap.className = 'flex items-center gap-1 ml-1 flex-shrink-0';
+  if (node.is_dir && node.child_count > 0) {
+    bwrap.innerHTML += `<span class="text-[9px] text-slate-600 bg-bg-hover border border-bg-border rounded-full px-1.5 py-0.5 font-mono">${node.child_count}</span>`;
+  }
+  if (!node.is_dir && node.ttl > 0) {
+    bwrap.innerHTML += `<span class="text-[9px] text-amber-500 bg-amber-dim border border-amber/20 rounded-full px-1.5 py-0.5 font-mono">⏱${node.ttl}s</span>`;
+  }
+
+  row.append(chev, icon, lbl, bwrap);
+  row.addEventListener('click', () => {
+    if (node.is_dir) {
+      S.expanded.has(node.key) ? S.expanded.delete(node.key) : S.expanded.add(node.key);
+      renderTree();
+    } else {
+      selectKey(node.key);
+    }
+  });
+
+  parent.appendChild(row);
+
+  if (node.is_dir && expanded && node.children?.length) {
+    const wrap = document.createElement('div');
+    wrap.className = 'tree-connector';
+    node.children.forEach(c => buildNode(c, wrap, depth + 1));
+    parent.appendChild(wrap);
+  }
+}
+
+function collapseAll() { S.expanded.clear(); renderTree(); }
+
+async function selectKey(key) {
+  S.selectedKey = key;
+  renderTree();
+  switchView('explorer');
+  showDetail();
+
+  document.getElementById('key-path-display').textContent = '…';
+  document.getElementById('value-pre').textContent = '';
+
+  try {
+    const node = await get(`/api/key?key=${encodeURIComponent(key)}`);
+    S.keyNode = node;
+    populateDetail(node);
+  } catch (e) {
+    document.getElementById('key-path-display').textContent = key;
+    document.getElementById('value-pre').textContent = `Error: ${e.message}`;
+  }
+}
+
+async function reloadKey() {
+  if (S.selectedKey) selectKey(S.selectedKey);
+}
+
+function showDetail() {
+  document.getElementById('exp-empty').style.display = 'none';
+  const d = document.getElementById('key-detail');
+  d.classList.remove('hidden');
+  d.classList.add('flex');
+}
+
+function populateDetail(node) {
+  const parts = node.key.split('/').filter(Boolean);
+  const bc = document.getElementById('breadcrumb');
+  bc.innerHTML = `<span class="hover:text-slate-300 cursor-pointer transition-colors" onclick="filterPrefix('')">root</span>`;
+  let cum = '';
+  parts.forEach((p, i) => {
+    cum += '/' + p;
+    const cp = cum;
+    bc.innerHTML += `<svg class="w-3 h-3 text-slate-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>`;
+    if (i === parts.length - 1) {
+      bc.innerHTML += `<span class="text-slate-300">${esc(p)}</span>`;
+    } else {
+      bc.innerHTML += `<span class="hover:text-slate-300 cursor-pointer transition-colors" onclick="filterPrefix('${esc(cp)}')">${esc(p)}</span>`;
+    }
+  });
+
+  document.getElementById('key-path-display').textContent = node.key;
+  document.getElementById('m-version').textContent = node.version;
+  document.getElementById('m-crev').textContent = '#' + node.create_rev;
+  document.getElementById('m-mrev').textContent = '#' + node.mod_rev;
+  document.getElementById('m-size').textContent = fmtBytes(node.size);
+
+  const ttlW = document.getElementById('m-ttl-wrap');
+  if (node.ttl > 0) {
+    document.getElementById('m-ttl').textContent = node.ttl + 's';
+    ttlW.classList.remove('hidden'); ttlW.classList.add('flex');
+  } else { ttlW.classList.add('hidden'); }
+
+  const tb = document.getElementById('vtype-badge');
+  const vtStyles = {
+    json:   { bg:'rgba(59,130,246,0.1)',   color:'#60a5fa', border:'rgba(59,130,246,0.25)', icon:'{}' },
+    text:   { bg:'rgba(100,116,139,0.1)',  color:'#94a3b8', border:'rgba(100,116,139,0.2)', icon:'T'  },
+    binary: { bg:'rgba(239,68,68,0.1)',    color:'#f87171', border:'rgba(239,68,68,0.25)',  icon:'⬡'  },
+  };
+  const vts = vtStyles[node.value_type] || vtStyles.text;
+  tb.style.cssText = `display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:999px;border:1px solid ${vts.border};background:${vts.bg};color:${vts.color}`;
+  tb.textContent = node.value_type;
+
+  const isBinary = node.value_type === 'binary';
+  document.getElementById('mode-tabs').style.display   = node.value_type === 'json' ? 'flex' : 'none';
+  document.getElementById('binary-tabs').style.display = isBinary ? 'flex' : 'none';
+  document.getElementById('wrap-btn').style.display    = isBinary ? 'none' : '';
+  // update copy button label
+  const copyBtn = document.getElementById('copy-val-btn');
+  if (copyBtn) {
+    const labels = { hex: ' Copy Hex', base64: ' Copy Base64', json: ' Copy JSON' };
+    if (isBinary) copyBtn.lastChild.textContent = labels[S.binaryMode] || ' Copy Base64';
+    else copyBtn.lastChild.textContent = ' Copy value';
+  }
+
+  applyValue();
+}
+
+function applyValue() {
+  const node = S.keyNode;
+  if (!node) return;
+  const isBinary = node.value_type === 'binary';
+  document.getElementById('binary-viewer').style.display = isBinary ? '' : 'none';
+  document.getElementById('text-viewer').style.display   = isBinary ? 'none' : '';
+
+  if (isBinary) {
+    // hint banner
+    const hintMap = {
+      'k8s-protobuf': 'Kubernetes Protobuf',
+      'protobuf':     'Protobuf',
+      'binary':       'Binary',
+    };
+    document.getElementById('binary-hint-text').textContent = hintMap[node.binary_hint] || 'Binary';
+    document.getElementById('binary-hex').textContent    = node.hex_preview || '(no preview)';
+    document.getElementById('binary-base64').textContent = node.value_base64 || '(no data)';
+    const jsonBtn = document.getElementById('bmode-json');
+    const hasJSON = !!(node.extracted_json);
+    jsonBtn.style.display = hasJSON ? '' : 'none';
+    if (hasJSON) {
+      document.getElementById('binary-json').innerHTML = jsonHL(node.extracted_json);
+    }
+    const mode = (S.binaryMode === 'json' && !hasJSON) ? 'hex' : (S.binaryMode || 'hex');
+    setBinaryMode(mode);
+  } else {
+    const pre = document.getElementById('value-pre');
+    pre.style.cssText = 'font-size:12.5px;font-family:"Geist Mono",monospace;line-height:1.6;color:#cbd5e1';
+    pre.className = S.wrap ? 'wrap' : '';
+    if (node.value_type === 'json' && S.valueMode === 'pretty') {
+      pre.innerHTML = jsonHL(node.value);
+    } else {
+      pre.textContent = node.value || '(empty)';
+    }
+  }
+}
+
+function setBinaryMode(m) {
+  S.binaryMode = m;
+  const setBtn = (id, active) => {
+    const el = document.getElementById(id);
+    if (!el || el.style.display === 'none') return;
+    el.style.cssText = active
+      ? 'padding:2px 8px;font-size:11px;font-weight:500;border-radius:3px;background:rgba(239,68,68,0.12);color:#f87171;cursor:pointer;border:none'
+      : 'padding:2px 8px;font-size:11px;font-weight:500;border-radius:3px;background:transparent;color:#64748b;cursor:pointer;border:none';
+  };
+  setBtn('bmode-hex',    m === 'hex');
+  setBtn('bmode-base64', m === 'base64');
+  setBtn('bmode-json',   m === 'json');
+  document.getElementById('binary-hex').style.display    = m === 'hex'    ? '' : 'none';
+  document.getElementById('binary-base64').style.display = m === 'base64' ? '' : 'none';
+  document.getElementById('binary-json').style.display   = m === 'json'   ? '' : 'none';
+}
+
+function setMode(m) {
+  S.valueMode = m;
+  const setModeBtn = (id, isActive) => {
+    const el = document.getElementById(id);
+    el.style.cssText = isActive
+      ? 'padding:2px 8px;font-size:11px;font-weight:500;border-radius:3px;background:rgba(59,130,246,0.12);color:#60a5fa;cursor:pointer;border:none'
+      : 'padding:2px 8px;font-size:11px;font-weight:500;border-radius:3px;background:transparent;color:#64748b;cursor:pointer;border:none';
+  };
+  setModeBtn('mode-pretty', m==='pretty');
+  setModeBtn('mode-raw',    m==='raw');
+  applyValue();
+}
+
+function toggleWrap() {
+  S.wrap = !S.wrap;
+  const btn = document.getElementById('wrap-btn');
+  btn.className = S.wrap ? '' : 'btn-ghost';
+  if (S.wrap) {
+    btn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:0 8px;border-radius:4px;height:22px;box-sizing:border-box;font-size:11px;font-weight:500;cursor:pointer;white-space:nowrap;flex-shrink:0;background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.2)';
+  } else { btn.style.cssText = ''; }
+  applyValue();
+}
+
+function copyKeyPath() {
+  if (!S.selectedKey) return;
+  navigator.clipboard.writeText(S.selectedKey);
+  toast('Key path copied');
+}
+
+function copyValue() {
+  if (!S.keyNode) return;
+  const text = S.keyNode.value_type === 'binary'
+    ? (S.binaryMode === 'json' ? S.keyNode.extracted_json : S.keyNode.value_base64) || ''
+    : S.keyNode.value || '';
+  navigator.clipboard.writeText(text);
+  const btn = document.getElementById('copy-val-btn');
+  const orig = btn.innerHTML;
+  btn.innerHTML = `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+  btn.style.background = '#052e16'; btn.style.color = '#4ade80'; btn.style.borderColor = 'rgba(34,197,94,0.3)';
+  setTimeout(() => { btn.innerHTML = orig; btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; }, 2000);
+}
+
+function filterPrefix(p) {
+  // Strip leading slash — etcd keys may not have one
+  const clean = p.replace(/^\/+/, '');
+  document.getElementById('prefix-filter').value = clean;
+  loadTree();
+}
+
+let schTimer;
+function setupSearch() {
+  const inp = document.getElementById('search-input');
+  inp.addEventListener('input', () => {
+    const q = inp.value.trim();
+    document.getElementById('search-clear').classList.toggle('hidden', !q);
+    document.getElementById('search-slash').classList.toggle('hidden', !!q);
+    clearTimeout(schTimer);
+    if (!q) { resetSearch(); return; }
+    if (q.length >= 2) {
+      switchView('search');
+      document.getElementById('search-status').innerHTML =
+        `Searching for <span class="text-slate-200 font-medium">${esc(q)}</span>…`;
+      schTimer = setTimeout(() => doSearch(q), 280);
+    }
+  });
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-clear').classList.add('hidden');
+  document.getElementById('search-slash').classList.remove('hidden');
+  resetSearch();
+}
+
+function resetSearch() {
+  document.getElementById('search-status').textContent = 'Search keys and values';
+  document.getElementById('search-count').textContent = '';
+  document.getElementById('results-list').innerHTML = `
+    <div class="flex flex-col items-center justify-center gap-3 h-full py-20 text-slate-600">
+      <svg class="w-8 h-8 opacity-30" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <p class="text-[13px]">Search across all keys and values</p>
+    </div>`;
+}
+
+async function doSearch(q) {
+  try {
+    const d = await get(`/api/search?q=${encodeURIComponent(q)}`);
+    const res = d.results || [];
+    document.getElementById('search-count').textContent = `${res.length} result${res.length!==1?'s':''}`;
+    document.getElementById('search-status').innerHTML =
+      `<span class="text-slate-500">Results for</span> <span class="text-slate-200 font-medium">${esc(q)}</span>`;
+
+    const list = document.getElementById('results-list');
+    if (!res.length) {
+      list.innerHTML = `<div class="flex flex-col items-center justify-center gap-3 py-20 text-slate-600">
+        <div class="text-3xl opacity-20">∅</div>
+        <p class="text-[13px]">No results for <span class="text-slate-400">"${esc(q)}"</span></p></div>`;
+      return;
+    }
+
+    const vtPill = (vt) => {
+      const s = {
+        json:   'background:rgba(59,130,246,0.1);color:#60a5fa;border-color:rgba(59,130,246,0.25)',
+        text:   'background:rgba(100,116,139,0.1);color:#94a3b8;border-color:rgba(100,116,139,0.2)',
+        binary: 'background:rgba(239,68,68,0.1);color:#f87171;border-color:rgba(239,68,68,0.25)',
+      };
+      return `<span style="display:inline-flex;align-items:center;font-size:9px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:999px;border:1px solid;${s[vt]||s.text}">${vt||'text'}</span>`;
+    };
+    list.innerHTML = `<div class="space-y-1.5">${res.map(r => `
+      <div class="card hover:bg-bg-hover transition-all cursor-pointer overflow-hidden" onclick="selectKey('${esc(r.key)}')">
+        <div class="flex items-center gap-2.5 px-3 py-2.5 border-b border-bg-border">
+          ${vtPill(r.value_type)}
+          <span class="flex-1 text-[12px] font-mono font-medium text-slate-200 truncate">${hlMatch(esc(r.key), q)}</span>
+          <svg class="w-3.5 h-3.5 text-slate-600 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+        <div class="px-3 py-2 text-[11px] font-mono text-slate-500 truncate">
+          ${hlMatch(esc((r.value||'').slice(0,200)), q)}
+        </div>
+      </div>`).join('')}</div>`;
+  } catch (e) {
+    document.getElementById('search-status').innerHTML = `<span class="text-red-400 text-[12px]">Error: ${esc(e.message)}</span>`;
+  }
+}
+
+function toggleWatch() { S.watchActive ? stopWatch() : startWatch(); }
+
+function startWatch() {
+  const prefix = document.getElementById('watch-prefix').value.trim();
+  S.putCount = 0; S.delCount = 0;
+  updateWatchCount();
+
+  S.watchES = new EventSource(`/api/watch?prefix=${encodeURIComponent(prefix)}`);
+  S.watchActive = true;
+
+  const btn = document.getElementById('watch-btn');
+  btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Stop`;
+  btn.className = 'btn-danger';
+
+  const wd = document.getElementById('watch-dot');
+  wd.style.cssText = 'width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px #22c55e;flex-shrink:0;animation:pulse-dot 2s ease-in-out infinite';
+  document.getElementById('watch-label').textContent = `Watching ${prefix || 'all keys'}`;
+  document.getElementById('watch-idle').style.display = 'none';
+
+  S.watchES.onmessage = e => {
+    const ev = JSON.parse(e.data);
+    if (ev.type === 'CONNECTED') return;
+    if (ev.type === 'PUT')    S.putCount++;
+    if (ev.type === 'DELETE') S.delCount++;
+    updateWatchCount();
+    // Persist to session
+    S.watchHistory.unshift(ev);
+    if (S.watchHistory.length > 500) S.watchHistory.length = 500;
+    try { sessionStorage.setItem('etcd-watch-history', JSON.stringify(S.watchHistory.slice(0,200))); } catch(e) {}
+    if (S.watchFilter === 'all' || S.watchFilter === ev.type) addEventRow(ev);
+  };
+  S.watchES.onerror = () => { document.getElementById('watch-label').textContent = 'Reconnecting…'; };
+}
+
+function stopWatch() {
+  S.watchES?.close(); S.watchES = null; S.watchActive = false;
+  const btn = document.getElementById('watch-btn');
+  btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start`;
+  btn.className = 'btn-primary';
+  const wd2 = document.getElementById('watch-dot');
+  wd2.style.cssText = 'width:6px;height:6px;border-radius:50%;background:#334155;flex-shrink:0';
+  document.getElementById('watch-label').textContent = 'Stopped';
+}
+
+function setWatchFilter(f) {
+  S.watchFilter = f;
+  document.querySelectorAll('.wf-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.wf === f);
+  });
+  document.querySelectorAll('.ev-row').forEach(r => {
+    r.style.display = (f==='all' || f===r.dataset.type) ? '' : 'none';
+  });
+}
+
+function addEventRow(ev) {
+  const feed = document.getElementById('events-feed');
+  const idle = document.getElementById('watch-idle');
+  if (idle) idle.style.display = 'none';
+
+  const isPut = ev.type === 'PUT';
+  const row   = document.createElement('div');
+  row.className = 'ev-row event-row';
+  row.style.cssText = 'display:grid;align-items:center;border-bottom:1px solid #1e293b;padding:8px 16px;cursor:pointer;font-size:12px;font-family:"Geist Mono",monospace;transition:background 0.1s';
+  row.onmouseenter = () => row.style.background = '#1a2133';
+  row.onmouseleave = () => row.style.background = '';
+  row.style.gridTemplateColumns = '60px 60px 1fr 180px 80px';
+  row.dataset.type = ev.type;
+
+  row.innerHTML = `
+    <div><span class="${isPut?'badge-green':'badge-red'} text-[10px]">${ev.type}</span></div>
+    <div class="text-slate-600 text-[11px]">${ev.revision||''}</div>
+    <div class="text-slate-200 truncate font-medium pr-4">${esc(ev.key||'')}</div>
+    <div class="text-slate-500 truncate text-[11px]">${esc((ev.value||'').slice(0,80))}</div>
+    <div class="text-slate-600 text-[11px]">${ev.timestamp||''}</div>
+  `;
+  if (ev.key) row.addEventListener('click', () => selectKey(ev.key));
+  feed.insertBefore(row, feed.firstChild);
+
+  // Keep max 300
+  const rows = feed.querySelectorAll('.ev-row');
+  if (rows.length > 300) rows[rows.length-1].remove();
+}
+
+function updateWatchCount() {
+  document.getElementById('put-count').textContent = S.putCount;
+  document.getElementById('del-count').textContent = S.delCount;
+}
+
+function clearEvents() {
+  document.querySelectorAll('.ev-row').forEach(r => r.remove());
+  S.putCount = 0; S.delCount = 0; S.watchHistory = [];
+  updateWatchCount();
+  document.getElementById('watch-idle').style.display = '';
+  try { sessionStorage.removeItem('etcd-watch-history'); } catch(e) {}
+}
+
+function switchView(view) {
+  S.view = view;
+  ['explorer','search','watch','cluster','auth','leases'].forEach(v => {
+    document.getElementById(`view-${v}`).classList.toggle('hidden', v !== view);
+  });
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === view);
+  });
+  if (view === 'cluster') { if (S.clusterInfo) renderCluster(S.clusterInfo); else loadCluster(); }
+  if (view === 'watch' && !S.watchActive) { restoreWatchHistory(); }
+  if (view === 'auth') { loadAuth(); }
+  if (view === 'leases') { loadLeases(); }
+}
+
+function setupResize() {
+  const r = document.getElementById('resizer');
+  const s = document.getElementById('sidebar');
+  let dragging = false, startX = 0, startW = 0;
+  r.addEventListener('mousedown', e => {
+    dragging=true; startX=e.clientX; startW=s.offsetWidth;
+    document.body.style.cursor='col-resize';
+    document.body.style.userSelect='none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    s.style.width = Math.min(480, Math.max(180, startW + e.clientX - startX)) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    dragging=false;
+    document.body.style.cursor='';
+    document.body.style.userSelect='';
+  });
+}
+
+function setupKeyboard() {
+  document.addEventListener('keydown', e => {
+    const inField = ['INPUT','TEXTAREA'].includes(document.activeElement.tagName);
+    if (e.key === '/' && !inField) { e.preventDefault(); document.getElementById('search-input').focus(); }
+    if (e.key === 'Escape') { document.getElementById('search-input').blur(); hideShortcuts(); }
+    if (!inField) {
+      if (e.key==='?') showShortcuts();
+      if (e.key==='r'||e.key==='R') loadTree();
+      if (e.key==='e'||e.key==='E') switchView('explorer');
+      if (e.key==='w'||e.key==='W') switchView('watch');
+      if (e.key==='c'||e.key==='C') switchView('cluster');
+    }
+  });
+}
+
+function showShortcuts() { document.getElementById('modal').classList.remove('hidden'); }
+function hideShortcuts() { document.getElementById('modal').classList.add('hidden'); }
+
+function showEditModal() {
+  if (!S.keyNode) return;
+  document.getElementById('edit-key-display').textContent = S.keyNode.key;
+  document.getElementById('edit-value').value = S.keyNode.value || '';
+  document.getElementById('edit-ttl').value = S.keyNode.ttl > 0 ? S.keyNode.ttl : '';
+  document.getElementById('edit-error').style.display = 'none';
+  document.getElementById('fmt-btn').style.display = S.keyNode.value_type === 'json' ? '' : 'none';
+  document.getElementById('edit-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('edit-value').focus(), 50);
+}
+
+function hideEditModal() {
+  document.getElementById('edit-modal').classList.add('hidden');
+}
+
+function formatEditJson() {
+  const ta = document.getElementById('edit-value');
+  try {
+    ta.value = JSON.stringify(JSON.parse(ta.value), null, 2);
+  } catch(e) {
+    showEditError('Invalid JSON: ' + e.message);
+  }
+}
+
+async function saveEdit() {
+  if (!S.keyNode) return;
+  const value = document.getElementById('edit-value').value;
+  document.getElementById('edit-error').style.display = 'none';
+  const ttlRaw = document.getElementById('edit-ttl').value.trim();
+  const ttl = ttlRaw !== '' ? parseInt(ttlRaw, 10) : 0;
+  try {
+    const r = await fetch('/api/key/put', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: S.keyNode.key, value, ttl })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    hideEditModal();
+    toast('Key saved');
+    selectKey(S.keyNode.key);
+    loadTree();
+  } catch(e) {
+    showEditError(e.message);
+  }
+}
+
+async function confirmDelete() {
+  if (!S.keyNode) return;
+  const key = S.keyNode.key;
+  if (!confirm('Delete key?\n\n' + key + '\n\nThis cannot be undone.')) return;
+  try {
+    const r = await fetch('/api/key/delete?key=' + encodeURIComponent(key), { method: 'DELETE' });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    hideEditModal();
+    toast('Key deleted');
+    S.keyNode = null; S.selectedKey = null;
+    document.getElementById('key-detail').classList.add('hidden');
+    document.getElementById('exp-empty').style.display = '';
+    loadTree();
+  } catch(e) {
+    showEditError(e.message);
+  }
+}
+
+function showEditError(msg) {
+  const el = document.getElementById('edit-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function esc(s) {
+  return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function hlMatch(text, q) {
+  if (!q) return text;
+  return text.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'), m => `<mark>${m}</mark>`);
+}
+
+function fmtBytes(b) {
+  if (!b) return '0 B';
+  if (b < 1024) return `${b} B`;
+  if (b < 1024**2) return `${(b/1024).toFixed(1)} KiB`;
+  return `${(b/1024**2).toFixed(2)} MiB`;
+}
+
+function jsonHL(str) {
+  const s = str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return s.replace(
+    /("(?:\\.|[^"\\])*")([ \t]*:)?|(-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)|(\btrue\b|\bfalse\b)|(\bnull\b)|([{}\[\],:])/g,
+    (m, str, colon, num, bool, nil, punct) => {
+      if (str && colon) return `<span class="jk">${str}</span><span class="jp">${colon}</span>`;
+      if (str)  return `<span class="js">${str}</span>`;
+      if (num !== undefined) return `<span class="jn">${m}</span>`;
+      if (bool) return `<span class="jb">${m}</span>`;
+      if (nil)  return `<span class="jl">${m}</span>`;
+      if (punct)return `<span class="jp">${m}</span>`;
+      return m;
+    }
+  );
+}
+
+function toast(msg, type='success') {
+  const el   = document.getElementById('toast');
+  const icon = document.getElementById('toast-icon');
+  const text = document.getElementById('toast-msg');
+  icon.style.cssText = `width:16px;height:16px;flex-shrink:0;color:${type==='error' ? '#f87171' : '#22c55e'}`;
+  text.textContent = msg;
+  el.classList.remove('hidden');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.add('hidden'), 2500);
+}
+
+const A = { authEnabled: false, users: [], roles: [], selectedUser: null, selectedRole: null };
+
+function hideAuthModal(id) { document.getElementById(id).classList.add('hidden'); }
+function showAuthErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg; el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
+async function loadAuth() {
+  document.getElementById('auth-loading').style.display = 'flex';
+  document.getElementById('auth-status-bar').style.display = 'none';
+  document.getElementById('auth-panels').style.display = 'none';
+  try {
+    const [statusRes, usersRes, rolesRes] = await Promise.all([
+      fetch('/api/auth/status').then(r => r.json()),
+      fetch('/api/auth/users').then(r => r.json()),
+      fetch('/api/auth/roles').then(r => r.json()),
+    ]);
+    A.authEnabled = statusRes.enabled || false;
+    A.users = usersRes.users || [];
+    A.roles = rolesRes.roles || [];
+  } catch(e) {
+    A.authEnabled = false; A.users = []; A.roles = [];
+  }
+  document.getElementById('auth-loading').style.display = 'none';
+  renderAuthStatus();
+  renderUsers();
+  renderRoles();
+  document.getElementById('auth-status-bar').style.display = 'flex';
+  document.getElementById('auth-panels').style.display = 'grid';
+}
+
+function renderAuthStatus() {
+  const dot = document.getElementById('auth-status-dot');
+  const lbl = document.getElementById('auth-status-label');
+  const btn = document.getElementById('auth-toggle-btn');
+  btn.style.display = '';
+  if (A.authEnabled) {
+    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px #22c55e;flex-shrink:0';
+    lbl.textContent = 'ENABLED';
+    lbl.style.color = '#4ade80';
+    btn.textContent = 'Disable Auth';
+    btn.className = 'btn-danger';
+  } else {
+    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#475569;flex-shrink:0';
+    lbl.textContent = 'DISABLED';
+    lbl.style.color = '#64748b';
+    btn.textContent = 'Enable Auth';
+    btn.className = 'btn-primary';
+  }
+}
+
+async function toggleAuth() {
+  const url = A.authEnabled ? '/api/auth/disable' : '/api/auth/enable';
+  try {
+    const r = await fetch(url, { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    toast(A.authEnabled ? 'Auth disabled' : 'Auth enabled');
+    loadAuth();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function renderUsers() {
+  const el = document.getElementById('users-list');
+  if (!A.users.length) {
+    el.innerHTML = '<div style="padding:20px 16px;font-size:12px;color:#475569;text-align:center">No users</div>';
+    return;
+  }
+  el.innerHTML = '';
+  A.users.forEach(u => {
+    const rolePills = u.roles.length
+      ? u.roles.map(r => `<span style="font-size:10px;background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);border-radius:3px;padding:1px 6px;font-family:monospace">${esc(r)}</span>`).join(' ')
+      : '<span style="font-size:10px;color:#334155">no roles</span>';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1e293b;cursor:pointer;transition:background .1s';
+    row.onmouseenter = () => row.style.background = '#1a2133';
+    row.onmouseleave = () => row.style.background = '';
+    row.onclick = () => openUserDetail(u.name);
+    row.innerHTML = `<div style="display:flex;align-items:center;gap:10px">
+      <div style="width:28px;height:28px;border-radius:50%;background:#1e2d45;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#60a5fa;flex-shrink:0">${esc(u.name[0].toUpperCase())}</div>
+      <div><div style="font-size:12px;font-weight:500;color:#e2e8f0;font-family:monospace">${esc(u.name)}</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${rolePills}</div></div></div>
+      <svg width="14" height="14" fill="none" stroke="#334155" stroke-width="2" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>`;
+    el.appendChild(row);
+  });
+}
+
+function showAddUser() {
+  document.getElementById('new-user-name').value = '';
+  document.getElementById('new-user-pass').value = '';
+  document.getElementById('add-user-err').style.display = 'none';
+  document.getElementById('add-user-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('new-user-name').focus(), 50);
+}
+
+async function addUser() {
+  const name = document.getElementById('new-user-name').value.trim();
+  const password = document.getElementById('new-user-pass').value;
+  if (!name) { showAuthErr('add-user-err', 'Username is required'); return; }
+  try {
+    const r = await fetch('/api/auth/users', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name, password }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    hideAuthModal('add-user-modal');
+    toast('User ' + name + ' created');
+    loadAuth();
+  } catch(e) { showAuthErr('add-user-err', e.message); }
+}
+
+function openUserDetail(name) {
+  const u = A.users.find(x => x.name === name);
+  if (!u) return;
+  A.selectedUser = u;
+  document.getElementById('ud-name').textContent = name;
+  document.getElementById('ud-new-pass').value = '';
+  document.getElementById('ud-err').style.display = 'none';
+  renderUserDetailRoles(u);
+  // Populate role grant dropdown
+  const sel = document.getElementById('ud-grant-role');
+  sel.innerHTML = '<option value="">Select role to grant…</option>'
+    + A.roles.filter(r => !u.roles.includes(r.name))
+              .map(r => '<option value="' + esc(r.name) + '">' + esc(r.name) + '</option>').join('');
+  document.getElementById('user-detail-modal').classList.remove('hidden');
+}
+
+function renderUserDetailRoles(u) {
+  const el = document.getElementById('ud-roles');
+  el.innerHTML = '';
+  if (!u.roles.length) {
+    el.innerHTML = '<span style="font-size:11px;color:#475569">No roles assigned</span>';
+    return;
+  }
+  u.roles.forEach(r => {
+    const pill = document.createElement('span');
+    pill.style.cssText = 'display:inline-flex;align-items:center;gap:4px;font-size:10px;background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);border-radius:3px;padding:2px 8px;font-family:monospace';
+    const btn = document.createElement('button');
+    btn.textContent = '×';
+    btn.title = 'Revoke';
+    btn.style.cssText = 'background:none;border:none;color:#6d28d9;cursor:pointer;padding:0;margin-left:2px;line-height:1;font-size:13px';
+    btn.onclick = (e) => { e.stopPropagation(); revokeRole(r); };
+    pill.appendChild(document.createTextNode(r + ' '));
+    pill.appendChild(btn);
+    el.appendChild(pill);
+  });
+}
+
+async function grantRoleToUser() {
+  const role = document.getElementById('ud-grant-role').value;
+  if (!role) return;
+  try {
+    const r = await fetch('/api/auth/user', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action: 'grantrole', name: A.selectedUser.name, role }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    toast('Role granted');
+    await loadAuth();
+    const updated = A.users.find(x => x.name === A.selectedUser.name);
+    if (updated) { A.selectedUser = updated; renderUserDetailRoles(updated); }
+    const sel = document.getElementById('ud-grant-role');
+    sel.innerHTML = '<option value="">Select role to grant…</option>'
+      + A.roles.filter(r => !updated.roles.includes(r.name))
+                .map(r => '<option value="' + esc(r.name) + '">' + esc(r.name) + '</option>').join('');
+  } catch(e) { showAuthErr('ud-err', e.message); }
+}
+
+async function revokeRole(role) {
+  if (!confirm('Revoke role ' + role + ' from ' + A.selectedUser.name + '?')) return;
+  try {
+    const r = await fetch('/api/auth/user', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action: 'revokerole', name: A.selectedUser.name, role }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    toast('Role revoked');
+    await loadAuth();
+    const updated = A.users.find(x => x.name === A.selectedUser.name);
+    if (updated) { A.selectedUser = updated; renderUserDetailRoles(updated); }
+  } catch(e) { showAuthErr('ud-err', e.message); }
+}
+
+async function changeUserPassword() {
+  const password = document.getElementById('ud-new-pass').value;
+  if (!password) { showAuthErr('ud-err', 'Password cannot be empty'); return; }
+  try {
+    const r = await fetch('/api/auth/user', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action: 'changepassword', name: A.selectedUser.name, password }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    document.getElementById('ud-new-pass').value = '';
+    toast('Password updated');
+  } catch(e) { showAuthErr('ud-err', e.message); }
+}
+
+async function deleteUser() {
+  if (!confirm('Delete user ' + A.selectedUser.name + '? This cannot be undone.')) return;
+  try {
+    const r = await fetch('/api/auth/users?name=' + encodeURIComponent(A.selectedUser.name), { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    hideAuthModal('user-detail-modal');
+    toast('User deleted');
+    loadAuth();
+  } catch(e) { showAuthErr('ud-err', e.message); }
+}
+
+function renderRoles() {
+  const el = document.getElementById('roles-list');
+  if (!A.roles.length) {
+    el.innerHTML = '<div style="padding:20px 16px;font-size:12px;color:#475569;text-align:center">No roles</div>';
+    return;
+  }
+  el.innerHTML = '';
+  A.roles.forEach(role => {
+    const count = role.permissions.length;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1e293b;cursor:pointer;transition:background .1s';
+    row.onmouseenter = () => row.style.background = '#1a2133';
+    row.onmouseleave = () => row.style.background = '';
+    row.onclick = () => openRoleDetail(role.name);
+    row.innerHTML = `<div style="display:flex;align-items:center;gap:10px">
+      <div style="width:28px;height:28px;border-radius:6px;background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <svg width="13" height="13" fill="none" stroke="#a78bfa" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg></div>
+      <div><div style="font-size:12px;font-weight:500;color:#e2e8f0;font-family:monospace">${esc(role.name)}</div>
+      <div style="font-size:10px;color:#64748b;margin-top:1px">${count} permission${count !== 1 ? 's' : ''}</div></div></div>
+      <svg width="14" height="14" fill="none" stroke="#334155" stroke-width="2" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>`;
+    el.appendChild(row);
+  });
+}
+
+function showAddRole() {
+  document.getElementById('new-role-name').value = '';
+  document.getElementById('add-role-err').style.display = 'none';
+  document.getElementById('add-role-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('new-role-name').focus(), 50);
+}
+
+async function addRole() {
+  const name = document.getElementById('new-role-name').value.trim();
+  if (!name) { showAuthErr('add-role-err', 'Role name is required'); return; }
+  try {
+    const r = await fetch('/api/auth/roles', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    hideAuthModal('add-role-modal');
+    toast('Role ' + name + ' created');
+    loadAuth();
+  } catch(e) { showAuthErr('add-role-err', e.message); }
+}
+
+function openRoleDetail(name) {
+  const role = A.roles.find(r => r.name === name);
+  if (!role) return;
+  A.selectedRole = role;
+  document.getElementById('rd-name').textContent = name;
+  document.getElementById('rd-key').value = '';
+  document.getElementById('rd-range-end').value = '';
+  document.getElementById('rd-perm-type').value = 'READWRITE';
+  document.getElementById('rd-err').style.display = 'none';
+  renderRolePerms(role);
+  document.getElementById('role-detail-modal').classList.remove('hidden');
+}
+
+function renderRolePerms(role) {
+  const el = document.getElementById('rd-perms');
+  el.innerHTML = '';
+  if (!role.permissions.length) {
+    el.innerHTML = '<div style="font-size:11px;color:#475569;padding:4px 0">No permissions granted</div>';
+    return;
+  }
+  const permColor = { READ: '#60a5fa', WRITE: '#fb923c', READWRITE: '#4ade80' };
+  role.permissions.forEach((p, i) => {
+    const rangeDisplay = p.range_end ? (' → ' + (p.range_end === '\x00' ? '(all with prefix)' : p.range_end)) : '';
+    const col = permColor[p.perm_type] || '#94a3b8';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#0d1117;border:1px solid #1e293b;border-radius:5px;padding:6px 10px;margin-bottom:5px';
+    const revokeBtn = document.createElement('button');
+    revokeBtn.title = 'Revoke';
+    revokeBtn.style.cssText = 'background:none;border:none;color:#64748b;cursor:pointer;padding:2px;flex-shrink:0';
+    revokeBtn.onmouseenter = () => revokeBtn.style.color = '#f87171';
+    revokeBtn.onmouseleave = () => revokeBtn.style.color = '#64748b';
+    revokeBtn.innerHTML = '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+    revokeBtn.onclick = () => revokePermission(i);
+    row.innerHTML = `<div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:9px;font-weight:700;color:${col};border:1px solid ${col}30;border-radius:3px;padding:1px 5px;background:${col}12">${p.perm_type}</span>
+      <span style="font-size:11px;font-family:monospace;color:#cbd5e1">${esc(p.key)}<span style="color:#475569">${esc(rangeDisplay)}</span></span></div>`;
+    row.appendChild(revokeBtn);
+    el.appendChild(row);
+  });
+}
+
+async function grantPermission() {
+  const key      = document.getElementById('rd-key').value.trim();
+  const rangeEnd = document.getElementById('rd-range-end').value.trim();
+  const permType = document.getElementById('rd-perm-type').value;
+  if (!key) { showAuthErr('rd-err', 'Key is required'); return; }
+  try {
+    const r = await fetch('/api/auth/role', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action: 'grant', role: A.selectedRole.name, key, range_end: rangeEnd, perm_type: permType }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    toast('Permission granted');
+    document.getElementById('rd-key').value = '';
+    document.getElementById('rd-range-end').value = '';
+    await loadAuth();
+    const updated = A.roles.find(r => r.name === A.selectedRole.name);
+    if (updated) { A.selectedRole = updated; renderRolePerms(updated); }
+  } catch(e) { showAuthErr('rd-err', e.message); }
+}
+
+async function revokePermission(idx) {
+  const p = A.selectedRole.permissions[idx];
+  if (!p) return;
+  if (!confirm('Revoke ' + p.perm_type + ' on ' + p.key + '?')) return;
+  try {
+    const r = await fetch('/api/auth/role', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action: 'revoke', role: A.selectedRole.name, key: p.key, range_end: p.range_end || '' }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    toast('Permission revoked');
+    await loadAuth();
+    const updated = A.roles.find(r => r.name === A.selectedRole.name);
+    if (updated) { A.selectedRole = updated; renderRolePerms(updated); }
+  } catch(e) { showAuthErr('rd-err', e.message); }
+}
+
+async function deleteRole() {
+  if (!confirm('Delete role ' + A.selectedRole.name + '? This cannot be undone.')) return;
+  try {
+    const r = await fetch('/api/auth/roles?name=' + encodeURIComponent(A.selectedRole.name), { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    hideAuthModal('role-detail-modal');
+    toast('Role deleted');
+    loadAuth();
+  } catch(e) { showAuthErr('rd-err', e.message); }
+}
+
+async function loadLeases() {
+  const el = document.getElementById('leases-content');
+  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:40px 0"><svg style="width:16px;height:16px;animation:spin 0.7s linear infinite;color:#3b82f6;opacity:0.5" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/><path fill="currentColor" opacity="0.75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg></div>';
+  try {
+    const d = await get('/api/leases');
+    const leases = d.leases || [];
+    if (!leases.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:#475569;font-size:12px">No active leases</div>';
+      return;
+    }
+    el.innerHTML = '';
+    leases.forEach(l => {
+      const card = document.createElement('div');
+      card.style.cssText = 'background:#161b27;border:1px solid #1e293b;border-radius:8px;padding:16px;margin-bottom:12px';
+      const pct = l.granted_ttl > 0 ? Math.max(0, Math.round((l.ttl / l.granted_ttl) * 100)) : 0;
+      const barColor = pct > 50 ? '#22c55e' : pct > 20 ? '#f59e0b' : '#ef4444';
+      const keyList = l.keys.length
+        ? l.keys.map(k => `<span style="display:inline-block;font-size:10px;font-family:monospace;color:#93c5fd;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:3px;padding:1px 6px;margin:2px">${esc(k)}</span>`).join('')
+        : '<span style="font-size:11px;color:#475569">No keys attached</span>';
+      card.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:11px;font-family:monospace;color:#a78bfa">0x${esc(l.id_hex)}</span>
+            <span style="font-size:10px;color:#64748b">${l.ttl}s remaining / ${l.granted_ttl}s granted</span>
+          </div>
+          <button onclick="revokeLeaseById(${l.id})" class="btn-danger" style="font-size:10px">Revoke</button>
+        </div>
+        <div style="height:4px;background:#1e293b;border-radius:2px;margin-bottom:10px">
+          <div style="height:4px;background:${barColor};border-radius:2px;width:${pct}%;transition:width .3s"></div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${keyList}</div>`;
+      el.appendChild(card);
+    });
+  } catch(e) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;font-size:12px">${esc(e.message)}</div>`;
+  }
+}
+
+async function revokeLeaseById(id) {
+  if (!confirm('Revoke lease 0x' + id.toString(16) + ' and all its keys?')) return;
+  try {
+    const r = await fetch('/api/lease/revoke', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id}) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    toast('Lease revoked');
+    loadLeases();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function hideHistoryModal() { document.getElementById('history-modal').classList.add('hidden'); }
+
+async function showKeyHistory() {
+  if (!S.keyNode) return;
+  hideEditModal();
+  document.getElementById('hist-key').textContent = S.keyNode.key;
+  document.getElementById('hist-content').innerHTML = '<div style="padding:20px;text-align:center;color:#475569;font-size:12px">Loading…</div>';
+  document.getElementById('history-modal').classList.remove('hidden');
+  try {
+    const d = await get('/api/key/history?key=' + encodeURIComponent(S.keyNode.key) + '&limit=30');
+    const entries = d.history || [];
+    if (!entries.length) {
+      document.getElementById('hist-content').innerHTML = '<div style="padding:20px;text-align:center;color:#475569;font-size:12px">No history available (key may be outside compaction window)</div>';
+      return;
+    }
+    const el = document.getElementById('hist-content');
+    el.innerHTML = '';
+    entries.forEach(e => {
+      const row = document.createElement('div');
+      row.style.cssText = 'border-bottom:1px solid #1e293b;padding:10px 4px';
+      const badge = e.is_delete
+        ? '<span style="font-size:9px;font-weight:700;color:#f87171;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:3px;padding:1px 5px">DELETE</span>'
+        : '<span style="font-size:9px;font-weight:700;color:#4ade80;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:3px;padding:1px 5px">PUT</span>';
+      const preview = e.is_delete ? '' : `<div style="font-size:11px;font-family:monospace;color:#94a3b8;margin-top:6px;white-space:pre-wrap;word-break:break-all;max-height:80px;overflow:hidden">${esc(e.value.slice(0,300))}${e.value.length>300?'…':''}</div>`;
+      row.innerHTML = `<div style="display:flex;align-items:center;gap:8px">${badge}<span style="font-size:10px;color:#64748b;font-family:monospace">rev ${e.revision}</span></div>${preview}`;
+      el.appendChild(row);
+    });
+  } catch(e) {
+    document.getElementById('hist-content').innerHTML = `<div style="padding:20px;color:#f87171;font-size:12px">${esc(e.message)}</div>`;
+  }
+}
+
+function showImpExp() {
+  document.getElementById('export-prefix').value = document.getElementById('prefix-filter').value || '';
+  document.getElementById('impexp-err').style.display = 'none';
+  document.getElementById('import-status').style.display = 'none';
+  document.getElementById('impexp-modal').classList.remove('hidden');
+}
+function hideImpExp() { document.getElementById('impexp-modal').classList.add('hidden'); }
+
+async function doExport() {
+  const prefix = document.getElementById('export-prefix').value.trim();
+  const url = '/api/export' + (prefix ? '?prefix=' + encodeURIComponent(prefix) : '');
+  try {
+    const r = await fetch(url);
+    if (!r.ok) { const d = await r.json(); throw new Error(d.error); }
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'etcd-export.json';
+    a.click();
+    toast('Export downloaded');
+  } catch(e) {
+    document.getElementById('impexp-err').textContent = e.message;
+    document.getElementById('impexp-err').style.display = 'block';
+  }
+}
+
+async function doImport() {
+  const fileInput = document.getElementById('import-file');
+  if (!fileInput.files.length) { alert('Select a JSON file first'); return; }
+  const text = await fileInput.files[0].text();
+  let data;
+  try { data = JSON.parse(text); } catch(e) { alert('Invalid JSON: ' + e.message); return; }
+  const entries = data.entries || (Array.isArray(data) ? data : null);
+  if (!entries) { alert('JSON must have an "entries" array'); return; }
+  try {
+    const r = await fetch('/api/import', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ entries }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    const st = document.getElementById('import-status');
+    st.textContent = 'Imported ' + d.imported + ' keys successfully';
+    st.style.display = 'block';
+    toast('Imported ' + d.imported + ' keys');
+    loadTree();
+  } catch(e) {
+    document.getElementById('impexp-err').textContent = e.message;
+    document.getElementById('impexp-err').style.display = 'block';
+  }
+}
+
+function restoreWatchHistory() {
+  if (!S.watchHistory.length) return;
+  const feed = document.getElementById('events-feed');
+  const idle = document.getElementById('watch-idle');
+  if (idle) idle.style.display = 'none';
+  // Clear existing rows first
+  feed.querySelectorAll('.ev-row').forEach(r => r.remove());
+  // Re-render from newest-first history
+  const toRender = S.watchHistory.slice(0, 300);
+  // We add newest first (insertBefore), history is already newest-first
+  toRender.forEach(ev => addEventRow(ev));
+  S.putCount = S.watchHistory.filter(e => e.type === 'PUT').length;
+  S.delCount = S.watchHistory.filter(e => e.type === 'DELETE').length;
+  updateWatchCount();
+}
+
+const PROFILES_KEY = 'etcd-ui-profiles';
+
+function loadProfilesData() {
+  try { return JSON.parse(localStorage.getItem(PROFILES_KEY) || '[]'); } catch(e) { return []; }
+}
+function saveProfilesData(profiles) {
+  try { localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles)); } catch(e) {}
+}
+
+function showProfiles() {
+  renderProfilesList();
+  document.getElementById('prof-name').value = '';
+  document.getElementById('prof-endpoint').value = window.location.host || 'localhost:2379';
+  document.getElementById('prof-user').value = '';
+  document.getElementById('prof-note').value = '';
+  document.getElementById('profiles-modal').classList.remove('hidden');
+}
+function hideProfiles() { document.getElementById('profiles-modal').classList.add('hidden'); }
+
+function renderProfilesList() {
+  const el = document.getElementById('profiles-list');
+  const profiles = loadProfilesData();
+  if (!profiles.length) {
+    el.innerHTML = '<div style="font-size:11px;color:#475569;padding:8px 0">No saved profiles yet.</div>';
+    return;
+  }
+  el.innerHTML = '';
+  profiles.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#0d1117;border:1px solid #1e293b;border-radius:5px;margin-bottom:6px';
+    const isCurrent = window.location.host === p.endpoint || p.endpoint === window.location.host;
+    row.innerHTML = `
+      <div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:12px;font-weight:500;color:#e2e8f0">${esc(p.name)}</span>
+          ${isCurrent ? '<span style="font-size:9px;color:#4ade80;border:1px solid #166534;background:rgba(34,197,94,0.1);border-radius:3px;padding:0 5px">current</span>' : ''}
+        </div>
+        <div style="font-size:10px;color:#60a5fa;font-family:monospace;margin-top:1px">${esc(p.endpoint)}${p.username ? ' · ' + esc(p.username) : ''}</div>
+        ${p.note ? `<div style="font-size:10px;color:#64748b;margin-top:1px">${esc(p.note)}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="connectProfile(${i})" class="btn-primary" style="font-size:10px">Connect</button>
+        <button onclick="deleteProfile(${i})" class="btn-ghost" style="font-size:10px;color:#f87171">Remove</button>
+      </div>`;
+    el.appendChild(row);
+  });
+}
+
+function saveProfile() {
+  const name = document.getElementById('prof-name').value.trim();
+  const endpoint = document.getElementById('prof-endpoint').value.trim();
+  if (!name || !endpoint) { alert('Name and endpoint are required'); return; }
+  const profiles = loadProfilesData();
+  profiles.push({
+    name,
+    endpoint,
+    username: document.getElementById('prof-user').value.trim(),
+    note: document.getElementById('prof-note').value.trim(),
+    savedAt: new Date().toISOString()
+  });
+  saveProfilesData(profiles);
+  renderProfilesList();
+  toast('Profile saved');
+  document.getElementById('prof-name').value = '';
+}
+
+function deleteProfile(i) {
+  const profiles = loadProfilesData();
+  profiles.splice(i, 1);
+  saveProfilesData(profiles);
+  renderProfilesList();
+}
+
+function connectProfile(i) {
+  const profiles = loadProfilesData();
+  const p = profiles[i];
+  if (!p) return;
+  // Open the UI pointed at the saved endpoint
+  const proto = window.location.protocol;
+  const port = window.location.port ? ':' + window.location.port : '';
+  const url = proto + '//' + p.endpoint + port;
+  if (confirm('Open etcd UI for ' + p.name + '\n' + url + '?')) {
+    window.open(url, '_blank');
+  }
+}
+
+function showBulkModal() {
+  document.getElementById('bulk-prefix').value = document.getElementById('prefix-filter').value || '';
+  document.getElementById('bulk-preview').style.display = 'none';
+  document.getElementById('bulk-err').style.display = 'none';
+  document.getElementById('bulk-modal').classList.remove('hidden');
+}
+function hideBulkModal() { document.getElementById('bulk-modal').classList.add('hidden'); }
+
+async function previewBulk() {
+  const prefix = document.getElementById('bulk-prefix').value.trim();
+  if (!prefix) { alert('Enter a prefix'); return; }
+  try {
+    const d = await get('/api/keys/bulk-preview?prefix=' + encodeURIComponent(prefix));
+    const prev = document.getElementById('bulk-preview');
+    prev.style.display = '';
+    if (!d.count) {
+      prev.innerHTML = '<span style="color:#475569">No keys match this prefix</span>';
+      return;
+    }
+    prev.innerHTML = `<span style="color:#f87171;font-weight:600">${d.count} keys will be deleted:</span>\n` +
+      d.keys.slice(0, 50).map(k => esc(k)).join('\n') +
+      (d.count > 50 ? `\n… and ${d.count - 50} more` : '');
+  } catch(e) {
+    document.getElementById('bulk-err').textContent = e.message;
+    document.getElementById('bulk-err').style.display = 'block';
+  }
+}
+
+async function confirmBulk() {
+  const prefix = document.getElementById('bulk-prefix').value.trim();
+  if (!prefix) { alert('Enter a prefix first'); return; }
+  if (!confirm('Delete ALL keys with prefix\n\n' + prefix + '\n\nThis cannot be undone.')) return;
+  try {
+    const r = await fetch('/api/keys/bulk-delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ prefix })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    hideBulkModal();
+    toast('Deleted ' + d.deleted + ' keys');
+    loadTree();
+  } catch(e) {
+    document.getElementById('bulk-err').textContent = e.message;
+    document.getElementById('bulk-err').style.display = 'block';
+  }
+}
+</script>
+</body>
+</html>
