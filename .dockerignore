@@ -29,3 +29,4 @@ docker-compose.yml
 .github/
 
 *.md
+etcd-ui-browser.png
